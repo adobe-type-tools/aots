@@ -1,0 +1,1922 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+
+<!--____________________________________________________________________________
+
+	Copyright 2000-2016 Adobe Systems Incorporated. All Rights Reserved.
+
+	Licensed under the Apache License, Version 2.0 (the "License");
+	you may not use these files except in compliance with the License.
+	You may obtain a copy of the License at
+
+	 http://www.apache.org/licenses/LICENSE-2.0
+
+	Unless required by applicable law or agreed to in writing, software
+	distributed under the License is distributed on an "AS IS" BASIS,
+	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+	See the License for the specific language governing permissions and
+	limitations under the License.
+  ___________________________________________________________________________-->
+
+<article xmlns:web='http://aots.adobe.com/2001/web'
+         xmlns=''
+         web:area='opentype_spec'
+         web:index='yes'>
+  <title>A Type2 interpreter</title>
+
+  <!--========================================================================-->
+  <section>
+    <title>Introduction</title>
+
+    <para>Here is a simple Type 2 interpreter. It is not a rasterizer:
+      however, Type 2 charstrings can be converted to other more or
+      less equivalent formats, such as PDF, which can be
+      rasterizered.</para>
+
+    <para>The class Type2Interpreter is the core. It decodes the bytes
+      in the charstring, manages the stack, and performs the
+      arithmetic, stack and subroutine operations.
+      For each operator, it calls a Type2Consumer, which can access
+      the stack.</para>
+
+    <para>The class Type2Dumper is a Type2Consumer that simply produces
+      a human readable form of the Type2 charstring.</para>
+
+    <para>The class Type22Pdf is a Type2Consumer that transforms the
+      graphic operations (movetos, linetos and curvetos) in an equivalent
+      PDF content stream. Of course, the hints are lost.</para>
+  </section>
+
+  <!--========================================================================-->
+  <section>
+    <title>Type2Interpreter</title>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type2Interpreter'>
+  <code-title>Type2Interpreter class</code-title>
+package com.adobe.aots.opentype;
+
+public class Type2Interpreter {
+  protected int nbHints;
+
+  protected double[] stack;
+  protected int stackDepth;
+  protected int callDepth;
+  protected double[] storage;
+  protected boolean potentialWidth;
+  protected double width;
+
+  public Type2Interpreter () {
+    stackDepth = 0;
+    stack = new double [48];
+    callDepth = 0;
+    storage = new double [32];
+    potentialWidth = true;
+  }
+
+  protected int getCard8 (byte[] data, int offset) {
+    int x = data [offset];
+    if (x &lt; 0) {
+      x += 256; }
+    return x;
+  }
+
+  protected int getCard16 (byte[] data, int offset) {
+    int b1 = ((int)(getCard8 (data, offset    ))) &lt;&lt;  8;
+    int b2 = ((int)(getCard8 (data, offset + 1)));
+    return (b1 | b2);
+  }
+
+  protected int getInt16 (byte[] data, int offset) {
+    int b1 = data [offset] &lt;&lt; 8;
+    int b2 = getCard8 (data, offset+1);
+    return (b1 | b2);
+  }
+
+  public void check (boolean b) {
+    if (! b) {
+      System.out.println ("");
+      System.out.println ("-----invalid Type2 charstring"); }
+  }
+
+  public int check_int (double d) {
+    int i = (int) d;
+    if (((double) i) != d) {
+      System.out.println ("");
+      System.out.println ("------expected integer"); }
+    return i;
+  }
+
+  public boolean decode (byte [] data,
+			 byte [][] localSubrs, byte [][] globalSubrs,
+                         Type2Consumer c) {
+    return decode (data, 0, data.length, localSubrs, globalSubrs, c);
+  }
+
+  public void handleWidth () {
+    if (stackDepth == 1) {
+      if (potentialWidth) {
+	width = stack [0]; }
+      else {
+	System.out.println ("");
+	System.out.println ("------stack is non empty"); }
+      stackDepth = 0; }
+    potentialWidth = false;
+  }
+
+  public boolean decode (byte [] data, int offset, int end,
+		         byte [][] localSubrs, byte [][] globalSubrs,
+                         Type2Consumer c) {
+
+    while (offset &lt; end) {
+      int b0 = getCard8 (data, offset);
+      offset++;
+
+      switch (b0)
+	{
+	case 1: { // hstem
+          check (stackDepth >= 2);
+	  nbHints += stackDepth / 2;
+	  c.hstem (stack, stackDepth);
+	  stackDepth = stackDepth % 2;
+	  handleWidth ();
+          break; }
+
+        case 3: { // vstem
+	  check (stackDepth >= 2);
+	  nbHints += stackDepth / 2;
+	  c.vstem (stack, stackDepth);
+	  stackDepth = stackDepth % 2;
+	  handleWidth ();
+	  break; }
+
+	case 4: { // vmoveto
+          check (stackDepth == 1 || stackDepth == 2);
+	  c.vmoveto (stack, stackDepth);
+	  stackDepth -= 1;
+	  handleWidth ();
+	  break; }
+
+        case 5: { // rlineto
+	  check (stackDepth >= 2 &amp;&amp; stackDepth % 2 == 0);
+	  c.rlineto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 6: { // hlineto
+	  check (stackDepth > 0);
+	  c.hlineto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 7: { // vlineto
+	  check (stackDepth > 0);
+	  c.vlineto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 8: { // rrcurveto
+	  check (stackDepth > 0 &amp;&amp; stackDepth % 6 == 0);
+	  c.rrcurveto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 10: { // callsubr
+	  check (stackDepth >= 1);
+	  int subr = check_int (stack [--stackDepth]);
+
+          if (localSubrs.length &lt; 1240) {
+	    subr += 107; }
+	  else if (localSubrs.length &lt; 33900) {
+	    subr += 1131; }
+	  else {
+	    subr += 32768; }
+	  c.callsubr (stack, stackDepth, subr);
+
+	  callDepth++;
+	  boolean endchar
+	    = decode (localSubrs [subr], 0, localSubrs [subr].length,
+ 		      localSubrs, globalSubrs, c);
+          callDepth--;
+	  if (endchar) {
+	    return endchar; }
+	  break; }
+
+        case 11: { // return
+	  check (callDepth > 0);
+	  c.return_op (stack, stackDepth);
+	  return false; }
+
+        case 12: {
+          int b1 = getCard8 (data, offset);
+          offset++;
+
+          switch (b1)
+	    {
+            case 3: { // and
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.and (stack, stackDepth);
+	      stack [stackDepth++] = (num1 == 0 || num2 == 0) ? 0 : 1;
+	      break; }
+
+            case 4: { // or
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.or (stack, stackDepth);
+	      stack [stackDepth++] = (num1 == 0 &amp;&amp; num2 == 0) ? 0 : 1;
+	      break; }
+
+            case 5: { // not
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.not (stack, stackDepth);
+	      stack [stackDepth++] = (num == 0) ? 1 : 0;
+	      break; }
+
+            case 9: { // abs
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.abs (stack, stackDepth);
+	      stack [stackDepth++] = (num &lt; 0) ? (-num) : num;
+	      break; }
+
+	    case 10: { // add
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.add (stack, stackDepth);
+	      stack [stackDepth++] = num1 + num2;
+	      break; }
+
+            case 11: { // sub
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.sub (stack, stackDepth);
+	      stack [stackDepth++] = num1 - num2;
+	      break; }
+
+            case 12: { // div
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.div (stack, stackDepth);
+	      stack [stackDepth++] = num1 / num2;
+	      break; }
+
+            case 14: { // neg
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.neg (stack, stackDepth);
+	      stack [stackDepth++] = -num;
+	      break; }
+
+            case 15: { // eq
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.eq (stack, stackDepth);
+	      stack [stackDepth++] = (num1 == num2) ? 1 : 0;
+	      break; }
+
+            case 18: { // drop
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.drop (stack, stackDepth);
+	      break; }
+
+            case 20: { // put
+	      check (stackDepth >= 2);
+	      int i = check_int (stack [--stackDepth]);
+	      double val = stack [--stackDepth];
+	      c.put (stack, stackDepth);
+	      storage [i] = val;
+	      break; }
+
+            case 21: { // get
+	      check (stackDepth >= 1);
+	      int i = check_int (stack [--stackDepth]);
+	      c.get (stack, stackDepth);
+	      stack [stackDepth++] = storage [i];
+	      break; }
+
+            case 22: { // ifselse
+	      check (stackDepth >= 4);
+	      double v2 = stack [--stackDepth];
+	      double v1 = stack [--stackDepth];
+	      double s2 = stack [--stackDepth];
+	      double s1 = stack [--stackDepth];
+	      c.ifelse (stack, stackDepth);
+	      stack [stackDepth++] = (v1 &lt;= v2) ? s1 : s2;
+	      break; }
+
+            case 23: { // random
+	      c.random (stack, stackDepth);
+	      stack [stackDepth++] = 0;
+	      break; }
+
+            case 24: { // mul
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.mul (stack, stackDepth);
+	      stack [stackDepth++] = num1 * num2;
+	      break; }
+
+            case 26: { // sqrt
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.sqrt (stack, stackDepth);
+	      stack [stackDepth++] = Math.sqrt (num);
+	      break; }
+
+            case 27: { // dup
+	      check (stackDepth >= 1);
+	      double num = stack [--stackDepth];
+	      c.dup (stack, stackDepth);
+	      stack [stackDepth++] = num;
+	      stack [stackDepth++] = num;
+	      break; }
+
+            case 28: { // exch
+	      check (stackDepth >= 2);
+	      double num2 = stack [--stackDepth];
+	      double num1 = stack [--stackDepth];
+	      c.exch (stack, stackDepth);
+	      stack [stackDepth++] = num2;
+	      stack [stackDepth++] = num1;
+	      break; }
+
+            case 29: { // index
+	      check (stackDepth >= 1);
+	      int i = check_int (stack [--stackDepth]);
+	      check (stackDepth >= i);
+	      c.index (stack, stackDepth);
+	      stack [stackDepth++] = stack [stackDepth - i - 1];
+	      break; }
+
+            case 30: { // roll
+	      check (stackDepth >= 2);
+	      int j = check_int (stack [--stackDepth]);
+	      int n = check_int (stack [--stackDepth]);
+	      check (stackDepth >= n);
+	      c.roll (stack, stackDepth);
+	      // TODO
+	      break; }
+
+            case 34: { // hflex
+	      check (stackDepth == 7);
+	      c.hflex (stack, stackDepth);
+	      stackDepth = 0;
+	      break; }
+
+            case 35: { // flex
+	      check (stackDepth == 13);
+	      c.flex (stack, stackDepth);
+	      stackDepth = 0;
+	      break; }
+
+            case 36: { // hflex1
+	      check (stackDepth == 9);
+	      c.hflex1 (stack, stackDepth);
+	      stackDepth = 0;
+	      break; }
+
+            case 37: { // flex1
+	      check (stackDepth == 11);
+	      c.flex1 (stack, stackDepth);
+	      stackDepth = 0;
+	      break; }
+
+            default: { // reserved
+	      c.reserved2 (stack, stackDepth, b1);
+	      break; }}
+
+	  break; }
+
+        case 14: { //
+	  c.endchar (stack, stackDepth);
+          handleWidth ();
+	  return true; }
+
+        case 18: { // hstemhm
+	  check (stackDepth >= 2);
+	  nbHints += stackDepth / 2;
+	  c.hstemhm (stack, stackDepth);
+	  stackDepth = stackDepth % 2;
+	  handleWidth ();
+	  break; }
+
+        case 19: { // hintmask
+	  check (stackDepth % 2 == 0);
+          if (stackDepth > 0) {
+  	    nbHints += stackDepth / 2;
+	    c.implicit_vstemhm (stack, stackDepth);
+	    stackDepth = 0; }
+
+	  int nbBytes = (nbHints + 7) / 8;
+	  c.hintmask (stack, stackDepth, data, offset, nbBytes);
+	  offset += nbBytes;
+	  stackDepth = 0;
+	  break; }
+
+        case 20: { // cntrmask
+	  check (stackDepth % 2 == 0);
+	  if (stackDepth > 0) {
+	    nbHints += stackDepth / 2;
+            c.implicit_vstemhm (stack, stackDepth);
+	    stackDepth = 0; }
+
+	  int nbBytes = (nbHints + 7) / 8;
+	  c.cntrmask (stack, stackDepth, data, offset, nbBytes);
+	  offset += nbBytes;
+	  stackDepth = 0;
+	  break; }
+
+        case 21: { // rmoveto
+	  check (stackDepth == 2 || stackDepth == 3);
+	  c.rmoveto (stack, stackDepth);
+	  stackDepth -= 2;
+          handleWidth ();
+	  break; }
+
+        case 22: { // hmoveto
+	  check (stackDepth == 1 || stackDepth == 2);
+	  c.hmoveto (stack, stackDepth);
+	  stackDepth -= 1;
+	  handleWidth ();
+	  break; }
+
+        case 23: { // vstemhm
+	  check (stackDepth >= 2 &amp;&amp; stackDepth % 2 == 0);
+	  nbHints += stackDepth / 2;
+	  c.vstemhm (stack, stackDepth);
+	  stackDepth = stackDepth % 2;
+	  handleWidth ();
+	  break; }
+
+        case 24: { // rcurveline
+	  check (stackDepth >= 8 &amp;&amp; stackDepth % 6 == 2);
+	  c.rcurveline (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 25: { // rlinecurve
+	  check (stackDepth >= 8 &amp;&amp; stackDepth % 2 == 0);
+	  c.rlinecurve (stack, stackDepth);
+	  stackDepth = 0;
+	  break;
+	}
+
+        case 26: { // vvcurveto
+	  check (stackDepth >= 4 &amp;&amp; stackDepth % 4 &lt;= 1);
+	  c.vvcurveto (stack, stackDepth);
+	  stackDepth = 0;
+	  break;
+	}
+
+        case 27: { // hhcurveto
+	  check (stackDepth >= 4 &amp;&amp; stackDepth % 4 &lt;= 1);
+	  c.hhcurveto (stack, stackDepth);
+	  stackDepth = 0;
+	  break;
+	}
+
+        case 28: { // integer
+	  int val = getInt16 (data, offset);
+	  offset += 2;
+	  c.integer (stack, stackDepth, val);
+	  stack [stackDepth++] = val;
+	  break; }
+
+
+        case 29: { // callgsubr
+	  check (stackDepth >= 1);
+	  int subr = check_int (stack [--stackDepth]);
+          if (globalSubrs.length &lt; 1240) {
+	    subr += 107; }
+	  else if (globalSubrs.length &lt; 33900) {
+	    subr += 1131; }
+	  else {
+	    subr += 32768; }
+	  c.callgsubr (stack, stackDepth, subr);
+
+          callDepth++;
+	  boolean endchar
+	    = decode (globalSubrs [subr], 0, globalSubrs [subr].length,
+		      localSubrs, globalSubrs, c);
+	  callDepth--;
+	  if (endchar) {
+	    return endchar; }
+	  break; }
+
+        case 30: { // vhcurveto
+	  check (stackDepth >= 4
+		  &amp;&amp; (   stackDepth % 8 == 0 || stackDepth % 8 == 1
+                      || stackDepth % 8 == 4 || stackDepth % 8 == 5));
+	  c.vhcurveto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 31: { // hvcurveto
+	  check (stackDepth >= 4
+		  &amp;&amp; (   stackDepth % 8 == 0 || stackDepth % 8 == 1
+                      || stackDepth % 8 == 4 || stackDepth % 8 == 5));
+	  c.hvcurveto (stack, stackDepth);
+	  stackDepth = 0;
+	  break; }
+
+        case 255: {
+	  int a = getInt16 (data, offset);
+          offset += 2;
+	  int b = getCard16 (data, offset);
+          offset += 2;
+	  c.fraction (stack, stackDepth, a, b);
+	  stack [stackDepth++] = ((double) a) / ((double) b);
+          break; }
+
+        default: {
+          if (32 &lt;= b0 &amp;&amp; b0 &lt;= 246) {
+	    int val = (b0 - 139);
+	    c.integer (stack, stackDepth, val);
+            stack [stackDepth++] = val; }
+
+          else if (247 &lt;= b0 &amp;&amp; b0 &lt;= 250) {
+            int b1 = getCard8 (data, offset);
+            offset++;
+	    int val = ((b0 - 247) * 256 + b1 + 108);
+	    c.integer (stack, stackDepth, val);
+            stack [stackDepth++] = val; }
+
+          else if (251 &lt;= b0 &amp;&amp; b0 &lt;= 254) {
+            int b1 = getCard8 (data, offset);
+            offset++;
+	    int val = (-(b0 - 251)*256 - b1 - 108);
+	    c.integer (stack, stackDepth, val);
+            stack [stackDepth++] = val; }
+
+          else {
+            c.reserved (stack, stackDepth, b0); }
+
+          break; }}}
+
+    check (false);
+    return false;
+  }
+}
+</code-fragment>
+
+  </section>
+
+  <!--========================================================================-->
+  <section>
+    <title>Type2Consumer</title>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type2Consumer'>
+  <code-title>Type2Consumer class</code-title>
+package com.adobe.aots.opentype;
+
+public interface Type2Consumer {
+  public void hstem (double stack[], int stackDepth);
+  public void vstem (double stack[], int stackDepth);
+  public void vmoveto (double stack[], int stackDepth);
+  public void rlineto (double stack[], int stackDepth);
+  public void hlineto (double stack[], int stackDepth);
+  public void vlineto (double stack[], int stackDepth);
+  public void rrcurveto (double stack[], int stackDepth);
+  public void callsubr (double stack[], int stackDepth, int subr);
+  public void return_op (double stack[], int stackDepth);
+  public void and (double stack[], int stackDepth);
+  public void or (double stack[], int stackDepth);
+  public void not (double stack[], int stackDepth);
+  public void abs (double stack[], int stackDepth);
+  public void add (double stack[], int stackDepth);
+  public void sub (double stack[], int stackDepth);
+  public void div (double stack[], int stackDepth);
+  public void neg (double stack[], int stackDepth);
+  public void eq (double stack[], int stackDepth);
+  public void drop (double stack[], int stackDepth);
+  public void put (double stack[], int stackDepth);
+  public void get (double stack[], int stackDepth);
+  public void ifelse (double stack[], int stackDepth);
+  public void random (double stack[], int stackDepth);
+  public void mul (double stack[], int stackDepth);
+  public void sqrt (double stack[], int stackDepth);
+  public void dup (double stack[], int stackDepth);
+  public void exch (double stack[], int stackDepth);
+  public void index (double stack[], int stackDepth);
+  public void roll (double stack[], int stackDepth);
+  public void hflex (double stack[], int stackDepth);
+  public void flex (double stack[], int stackDepth);
+  public void hflex1 (double stack[], int stackDepth);
+  public void flex1 (double stack[], int stackDepth);
+  public void endchar (double stack[], int stackDepth);
+  public void hstemhm (double stack[], int stackDepth);
+  public void hintmask (double stack[], int stackDepth, byte [] data, int offset, int length);
+  public void cntrmask (double stack[], int stackDepth, byte [] data, int offset, int length);
+  public void rmoveto (double stack[], int stackDepth);
+  public void hmoveto (double stack[], int stackDepth);
+  public void vstemhm (double stack[], int stackDepth);
+  public void implicit_vstemhm (double stack[], int stackDepth);
+  public void rcurveline (double stack[], int stackDepth);
+  public void rlinecurve (double stack[], int stackDepth);
+  public void vvcurveto (double stack[], int stackDepth);
+  public void hhcurveto (double stack[], int stackDepth);
+  public void callgsubr (double stack[], int stackDepth, int subr);
+  public void vhcurveto (double stack[], int stackDepth);
+  public void hvcurveto (double stack[], int stackDepth);
+
+  public void integer (double stack[], int stackDepth, int i);
+  public void fraction (double stack[], int stackDepth, int a, int b);
+
+  public void reserved (double stack[], int stackDepth, int i);
+  public void reserved2 (double stack[], int stackDepth, int i);
+}
+</code-fragment>
+  </section>
+
+  <!--========================================================================-->
+  <section>
+    <title>Type2Dumper</title>
+
+    <para>This consumer simply outputs a human readable version of
+      charstring, with as little interpretation as possible.</para>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type2Dumper'>
+  <code-title>Type2Consumer class</code-title>
+package com.adobe.aots.opentype;
+
+public class Type2Dumper implements Type2Consumer {
+
+  StringBuilder sb;
+
+  public Type2Dumper (StringBuilder sb) {
+    this.sb = sb;
+  }
+
+  protected int getCard8 (byte[] data, int offset) {
+    int x = data [offset];
+    if (x &lt; 0) {
+      x += 256; }
+    return x;
+  }
+
+
+  public void hstem (double stack[], int stackDepth) {
+    sb.append ("hstem ");
+  }
+
+  public void vstem (double stack[], int stackDepth) {
+    sb.append ("vstem ");
+  }
+
+  public void vmoveto (double stack[], int stackDepth) {
+    sb.append ("vmoveto ");
+  }
+
+  public void rlineto (double stack[], int stackDepth) {
+    sb.append ("rlineto ");
+  }
+
+  public void hlineto (double stack[], int stackDepth) {
+    sb.append ("hlineto ");
+  }
+
+  public void vlineto (double stack[], int stackDepth) {
+    sb.append ("vlineto ");
+  }
+
+  public void rrcurveto (double stack[], int stackDepth) {
+    sb.append ("rrcurveto ");
+  }
+
+  public void callsubr (double stack[], int stackDepth, int subr) {
+    sb.append ("callsubr #" + subr + " ");
+  }
+
+  public void return_op (double stack[], int stackDepth) {
+    sb.append ("return ");
+  }
+
+  public void and (double stack[], int stackDepth) {
+    sb.append ("and ");
+  }
+
+  public void or (double stack[], int stackDepth) {
+    sb.append ("or ");
+  }
+
+  public void not (double stack[], int stackDepth) {
+    sb.append ("not ");
+  }
+
+  public void abs (double stack[], int stackDepth) {
+    sb.append ("abs ");
+  }
+
+  public void add (double stack[], int stackDepth) {
+    sb.append ("add ");
+  }
+
+  public void sub (double stack[], int stackDepth) {
+    sb.append ("sub ");
+  }
+
+  public void div (double stack[], int stackDepth) {
+    sb.append ("div ");
+  }
+
+  public void neg (double stack[], int stackDepth) {
+    sb.append ("neg ");
+  }
+
+  public void eq (double stack[], int stackDepth) {
+    sb.append ("eq ");
+  }
+
+  public void drop (double stack[], int stackDepth) {
+    sb.append ("drop ");
+  }
+
+  public void put (double stack[], int stackDepth) {
+    sb.append ("put ");
+  }
+
+  public void get (double stack[], int stackDepth) {
+    sb.append ("get ");
+  }
+
+  public void ifelse (double stack[], int stackDepth) {
+    sb.append ("ifelse ");
+  }
+
+  public void random (double stack[], int stackDepth) {
+    sb.append ("random ");
+  }
+
+  public void mul (double stack[], int stackDepth) {
+    sb.append ("mul ");
+  }
+
+  public void sqrt (double stack[], int stackDepth) {
+    sb.append ("sqrt ");
+  }
+
+  public void dup (double stack[], int stackDepth) {
+    sb.append ("dup ");
+  }
+
+  public void exch (double stack[], int stackDepth) {
+    sb.append ("exch ");
+  }
+
+  public void index (double stack[], int stackDepth) {
+    sb.append ("index ");
+  }
+
+  public void roll (double stack[], int stackDepth) {
+    sb.append ("roll ");
+  }
+
+  public void hflex (double stack[], int stackDepth) {
+    sb.append ("hflex ");
+  }
+
+  public void flex (double stack[], int stackDepth) {
+    sb.append ("flex ");
+  }
+
+  public void hflex1 (double stack[], int stackDepth) {
+    sb.append ("hflex1 ");
+  }
+
+  public void flex1 (double stack[], int stackDepth) {
+    sb.append ("flex1 ");
+  }
+
+  public void endchar (double stack[], int stackDepth) {
+    sb.append ("endchar");
+  }
+
+  public void hstemhm (double stack[], int stackDepth) {
+    sb.append ("hstemhm ");
+  }
+
+  public void hintmask (double stack[], int stackDepth, byte [] data, int offset, int length) {
+    sb.append ("hintmask ");
+    for (int i = offset; i &lt; offset + length; i++) {
+      sb.append ("#" + Integer.toHexString (getCard8 (data ,i))); }
+    sb.append (" ");
+  }
+
+  public void cntrmask (double stack[], int stackDepth, byte [] data, int offset, int length) {
+    sb.append ("cntrmask ");
+    for (int i = offset; i &lt; offset + length; i++) {
+      sb.append ("#" + Integer.toHexString (getCard8 (data, i))); }
+    sb.append (" ");
+  }
+
+  public void rmoveto (double stack[], int stackDepth) {
+    sb.append ("rmoveto ");
+  }
+
+  public void hmoveto (double stack[], int stackDepth) {
+    sb.append ("hmoveto ");
+  }
+
+  public void vstemhm (double stack[], int stackDepth) {
+    sb.append ("vstemhm ");
+  }
+
+  public void implicit_vstemhm (double stack[], int stackDepth) {
+    sb.append ("[vstemhm]");
+  }
+
+  public void rcurveline (double stack[], int stackDepth) {
+    sb.append ("rcurveline ");
+  }
+
+  public void rlinecurve (double stack[], int stackDepth) {
+    sb.append ("rlinecurve ");
+  }
+
+  public void vvcurveto (double stack[], int stackDepth) {
+    sb.append ("vvcurveto ");
+  }
+
+  public void hhcurveto (double stack[], int stackDepth) {
+    sb.append ("hhcurveto ");
+  }
+
+  public void callgsubr (double stack[], int stackDepth, int subr) {
+    sb.append ("callgsubr #" + subr + " ");
+  }
+
+  public void vhcurveto (double stack[], int stackDepth) {
+    sb.append ("vhcurveto ");
+  }
+
+  public void hvcurveto (double stack[], int stackDepth) {
+    sb.append ("hvcurveto ");
+  }
+
+  public void integer (double stack[], int stackDepth, int i) {
+    sb.append ("" + i + " ");
+  }
+
+  public void fraction (double stack[], int stackDepth, int a, int b) {
+    sb.append ("" + a + "/" + b + " ");
+  }
+
+  public void reserved (double stack[], int stackDepth, int i) {
+    sb.append ("reserved/" + i + " ");
+  }
+
+  public void reserved2 (double stack[], int stackDepth, int i) {
+    sb.append ("reserved2/" + i + " ");
+  }
+}
+</code-fragment>
+    </section>
+
+
+  <!--========================================================================-->
+  <section>
+    <title>Type2LinesAndCurves</title>
+
+    <para>This consumer defines three methods, MoveTo, Line and Curve,
+      and calls them as the charstring is interpreted. The intent is
+      that it is subclassed, with those three methods modified.</para>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type2LinesAndCurves'>
+  <code-title>Type2LinesAndCurves class</code-title>
+package com.adobe.aots.opentype;
+
+public class Type2LinesAndCurves implements Type2Consumer {
+  protected double x;
+  protected double y;
+
+  Type2LinesAndCurves () {
+    this.x = 0;
+    this.y = 0;
+  }
+
+  public void moveTo (double x, double y) {
+  }
+
+  public void line (double x1, double y1, double x2, double y2) {
+  }
+
+  public void curve (double x1, double y1, double x2, double y2,
+                     double x3, double y3, double x4, double y4) {
+  }
+
+
+  protected int getCard8 (byte[] data, int offset) {
+    int x = data [offset];
+    if (x &lt; 0) {
+      x += 256; }
+    return x;
+  }
+
+  public void hstem (double stack[], int stackDepth) {}
+  public void vstem (double stack[], int stackDepth) {}
+  public void callsubr (double stack[], int stackDepth, int subr) { }
+  public void return_op (double stack[], int stackDepth) {}
+  public void and (double stack[], int stackDepth) {}
+  public void or (double stack[], int stackDepth) {}
+  public void not (double stack[], int stackDepth) {}
+  public void abs (double stack[], int stackDepth) {}
+  public void add (double stack[], int stackDepth) {}
+  public void sub (double stack[], int stackDepth) {}
+  public void div (double stack[], int stackDepth) {}
+  public void neg (double stack[], int stackDepth) {}
+  public void eq (double stack[], int stackDepth) {}
+  public void drop (double stack[], int stackDepth) {}
+  public void put (double stack[], int stackDepth) {}
+  public void get (double stack[], int stackDepth) {}
+  public void ifelse (double stack[], int stackDepth) {}
+  public void random (double stack[], int stackDepth) {}
+  public void mul (double stack[], int stackDepth) {}
+  public void sqrt (double stack[], int stackDepth) {}
+  public void dup (double stack[], int stackDepth) {}
+  public void exch (double stack[], int stackDepth) {}
+  public void index (double stack[], int stackDepth) {}
+  public void roll (double stack[], int stackDepth) {}
+
+  public void hstemhm (double stack[], int stackDepth) {}
+  public void hintmask (double stack[], int stackDepth, byte [] data, int offset, int length) {}
+  public void cntrmask (double stack[], int stackDepth, byte [] data, int offset, int length) {}
+
+  public void vstemhm (double stack[], int stackDepth) {}
+  public void implicit_vstemhm (double stack[], int stackDepth) {}
+
+  public void callgsubr (double stack[], int stackDepth, int subr) {}
+
+  public void integer (double stack[], int stackDepth, int i) {}
+  public void fraction (double stack[], int stackDepth, int a, int b) {}
+  public void reserved (double stack[], int stackDepth, int i) {}
+  public void reserved2 (double stack[], int stackDepth, int i) {}
+
+
+  public void endchar (double stack[], int stackDepth) {
+  }
+
+
+  public void rmoveto (double stack[], int stackDepth) {
+    x += stack [stackDepth - 2];
+    y += stack [stackDepth - 1];
+    moveTo (x, y);
+  }
+
+  public void hmoveto (double stack[], int stackDepth) {
+    x += stack [stackDepth - 1];
+    moveTo (x, y);
+  }
+
+  public void vmoveto (double stack[], int stackDepth) {
+    y += stack [stackDepth - 1];
+    moveTo (x, y);
+  }
+
+  public void rlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i += 2) {
+      double x1 = x;
+      double y1 = y;
+      x += stack [i];
+      y += stack [i+1];
+      line (x1, y1, x, y); }
+  }
+
+  public void hlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i++) {
+      if (i % 2 == 0) {
+        double x1 = x;
+	x += stack [i];
+        line (x1, y, x, y); }
+      else {
+        double y1 = y;
+	y += stack [i];
+        line (x, y1, x, y); }}
+  }
+
+  public void vlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i++) {
+      if (i % 2 == 1) {
+        double x1 = x;
+	x += stack [i];
+        line (x1, y, x, y); }
+      else {
+        double y1 = y;
+	y += stack [i];
+        line (x, y1, x, y); }}
+  }
+
+  public void rrcurveto (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    for (int i = 0; i &lt; stackDepth; i += 6) {
+      x1 = x;
+      y1 = y;
+      x += stack [i];
+      y += stack [i+1];
+      x2 = x;
+      y2 = y;
+      x += stack [i+2];
+      y += stack [i+3];
+      x3 = x;
+      y3 = y;
+      x += stack [i+4];
+      y += stack [i+5];
+      curve (x1, y1, x2, y2, x3, y3, x, y); }
+    }
+
+  public void hhcurveto (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+    x1 = x;
+    y1 = y;
+    if (stackDepth % 2 == 1) {
+      y += stack [i++]; }
+    while (i &lt; stackDepth) {
+      x += stack [i++];
+      x2 = x;
+      y2 = y;
+      x += stack [i++];
+      y += stack [i++];
+      x3 = x;
+      y3 = y;
+      x += stack [i++];
+      curve (x1, y1, x2, y2, x3, y3, x, y);
+      x1 = x;
+      y1 = y; }
+    }
+
+  public void hvcurveto (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+    x1 = x;
+    y1 = y;
+
+    if (stackDepth % 8 == 4 || stackDepth % 8 == 5) {
+      x += stack [i++];
+      x2 = x;
+      y2 = y;
+      x += stack [i++];
+      y += stack [i++];
+      x3 = x;
+      y3 = y;
+      y += stack [i++];
+      if (i + 1 == stackDepth) {
+	x += stack [i++]; }
+      curve (x1, y1, x2, y2, x3, y3, x, y);
+      x1 = x;
+      y1 = y;
+
+      while (i + 8 &lt;= stackDepth) {
+	y += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	x += stack [i++];
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y;
+
+	x += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	y += stack [i++];
+	if (i + 1 == stackDepth) {
+	  x += stack [i++]; }
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y;}}
+
+    else {
+      while (i + 8 &lt;= stackDepth) {
+	x += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	y += stack [i++];
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y;
+
+	y += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	x += stack [i++];
+	if (i + 1 == stackDepth) {
+	  y += stack [i++]; }
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y; }}
+  }
+
+  public void rcurveline (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+
+    while (i + 6 &lt;= stackDepth) {
+      x += stack [i++];
+      y += stack [i++];
+      x2 = x;
+      y2 = y;
+      x += stack [i++];
+      y += stack [i++];
+      x3 = x;
+      y3 = y;
+      x += stack [i++];
+      y += stack [i++];
+      curve (x1, y1, x2, y2, x3, y3, x, y);
+      x1 = x;
+      y1 = y; }
+
+    x += stack [i++];
+    y += stack [i++];
+    line (x1, y1, x, y);
+  }
+
+  public void rlinecurve (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+    while (i + 6 &lt; stackDepth) {
+      x += stack [i++];
+      y += stack [i++];
+      line (x1, y1, x, y);
+      x1 = x;
+      y1 = y; }
+
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    y += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+    }
+
+  public void vvcurveto (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+    if (stackDepth % 2 == 1) {
+      x += stack [i++]; }
+    while (i &lt; stackDepth) {
+      y += stack [i++];
+      x2 = x;
+      y2 = y;
+      x += stack [i++];
+      y += stack [i++];
+      x3 = x;
+      y3 = y;
+      y += stack [i++];
+      curve (x1, y1, x2, y2, x3, y3, x, y);
+      x1 = x;
+      y1 = y; }
+  }
+
+  public void vhcurveto (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+    x1 = x;
+    y1 = y;
+    if (stackDepth % 8 == 4 || stackDepth % 8 == 5) {
+      y += stack [i++];
+      x2 = x;
+      y2 = y;
+      x += stack [i++];
+      y += stack [i++];
+      x3 = x;
+      y3 = y;
+      x += stack [i++];
+      if (i + 1 == stackDepth) {
+	y += stack [i++]; }
+      curve (x1, y1, x2, y2, x3, y3, x, y);
+      x1 = x;
+      y1 = y;
+
+      while (i + 8 &lt;= stackDepth) {
+	x += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	y += stack [i++];
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y;
+
+	y += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	x += stack [i++];
+	if (i + 1 == stackDepth) {
+	  y += stack [i++]; }
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y; }}
+
+    else {
+      while (i + 8 &lt;= stackDepth) {
+	y += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	x += stack [i++];
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y;
+
+	x += stack [i++];
+        x2 = x;
+        y2 = y;
+	x += stack [i++];
+	y += stack [i++];
+        x3 = x;
+        y3 = y;
+	y += stack [i++];
+	if (i + 1 == stackDepth) {
+	  x += stack [i++]; }
+        curve (x1, y1, x2, y2, x3, y3, x, y);
+        x1 = x;
+        y1 = y; }}
+  }
+
+  public void hflex (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+    x += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+    x1 = x;
+    y1 = y;
+
+    x += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+  }
+
+  public void flex (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    y += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+    x1 = x;
+    y1 = y;
+
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    y += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+  }
+
+  public void hflex1 (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    x1 = x;
+    y1 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+    x1 = x;
+    y1 = y;
+
+    x += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+  }
+
+  public void flex1 (double stack[], int stackDepth) {
+    double x1, y1, x2, y2, x3, y3;
+    int i = 0;
+
+    double startx = x;
+    double starty = y;
+    x1 = x;
+    y1 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    x += stack [i++];
+    y += stack [i++];
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+    x1 = x;
+    y1 = y;
+
+    x += stack [i++];
+    y += stack [i++];
+    x2 = x;
+    y2 = y;
+    x += stack [i++];
+    y += stack [i++];
+    x3 = x;
+    y3 = y;
+    if (Math.abs (x - startx) > Math.abs (y - starty)) {
+      x += stack [i++]; }
+    else {
+      y += stack [i++]; }
+    curve (x1, y1, x2, y2, x3, y3, x, y);
+  }
+}
+</code-fragment>
+  </section>
+
+  <!--========================================================================-->
+  <section>
+    <title>Type22Pdf</title>
+
+    <para>This consumer fills a StringBuilder with a PDF content stream
+      with path building operators that replicate the charstring. The
+      path is not stroked or filled by this consumer.</para>
+
+    <para>This should be rewritten as a subclass of Type2LinesAndCurves.</para>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type22Pdf'>
+  <code-title>Type22Pdf class</code-title>
+package com.adobe.aots.opentype;
+
+public class Type22Pdf implements Type2Consumer {
+  protected double x;
+  protected double y;
+  protected StringBuilder sb;
+
+  Type22Pdf (StringBuilder sb, double x, double y) {
+    this.sb = sb;
+    this.x = x;
+    this.y = y;
+  }
+
+
+  protected int getCard8 (byte[] data, int offset) {
+    int x = data [offset];
+    if (x &lt; 0) {
+      x += 256; }
+    return x;
+  }
+
+  public void hstem (double stack[], int stackDepth) {}
+  public void vstem (double stack[], int stackDepth) {}
+  public void callsubr (double stack[], int stackDepth, int subr) { }
+  public void return_op (double stack[], int stackDepth) {}
+  public void and (double stack[], int stackDepth) {}
+  public void or (double stack[], int stackDepth) {}
+  public void not (double stack[], int stackDepth) {}
+  public void abs (double stack[], int stackDepth) {}
+  public void add (double stack[], int stackDepth) {}
+  public void sub (double stack[], int stackDepth) {}
+  public void div (double stack[], int stackDepth) {}
+  public void neg (double stack[], int stackDepth) {}
+  public void eq (double stack[], int stackDepth) {}
+  public void drop (double stack[], int stackDepth) {}
+  public void put (double stack[], int stackDepth) {}
+  public void get (double stack[], int stackDepth) {}
+  public void ifelse (double stack[], int stackDepth) {}
+  public void random (double stack[], int stackDepth) {}
+  public void mul (double stack[], int stackDepth) {}
+  public void sqrt (double stack[], int stackDepth) {}
+  public void dup (double stack[], int stackDepth) {}
+  public void exch (double stack[], int stackDepth) {}
+  public void index (double stack[], int stackDepth) {}
+  public void roll (double stack[], int stackDepth) {}
+
+  public void hstemhm (double stack[], int stackDepth) {}
+  public void hintmask (double stack[], int stackDepth, byte [] data, int offset, int length) {}
+  public void cntrmask (double stack[], int stackDepth, byte [] data, int offset, int length) {}
+
+  public void vstemhm (double stack[], int stackDepth) {}
+  public void implicit_vstemhm (double stack[], int stackDepth) {}
+
+  public void callgsubr (double stack[], int stackDepth, int subr) {}
+
+  public void integer (double stack[], int stackDepth, int i) {}
+  public void fraction (double stack[], int stackDepth, int a, int b) {}
+  public void reserved (double stack[], int stackDepth, int i) {}
+  public void reserved2 (double stack[], int stackDepth, int i) {}
+
+
+  protected void addXY (String op) {
+    if (((int) x) == x) {
+      sb.append ((int) x); }
+    else {
+      sb.append (x); }
+    sb.append (' ');
+    if (((int) y) == y) {
+      sb.append ((int) y); }
+    else {
+      sb.append (y); }
+    sb.append (' ');
+    if (op != null) {
+      sb.append (op);
+      sb.append ('\n'); }
+  }
+
+  protected void addComment (String c) {
+    sb.append ("%-- ");
+    sb.append (c);
+    sb.append ('\n');
+  }
+
+  public void endchar (double stack[], int stackDepth) {
+  }
+
+  public void rmoveto (double stack[], int stackDepth) {
+    sb.append ("h\n");
+    x += stack [stackDepth - 2];
+    y += stack [stackDepth - 1];
+    addXY ("m");
+  }
+
+  public void hmoveto (double stack[], int stackDepth) {
+    sb.append ("h\n");
+    x += stack [stackDepth - 1];
+    addXY ("m");
+  }
+
+  public void vmoveto (double stack[], int stackDepth) {
+    sb.append ("h\n");
+    y += stack [stackDepth - 1];
+    addXY ("m");
+  }
+
+  public void rlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i += 2) {
+      x += stack [i];
+      y += stack [i+1];
+      addXY ("l"); }
+  }
+
+  public void hlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i++) {
+      if (i % 2 == 0) {
+	x += stack [i]; }
+      else {
+	y += stack [i]; }
+      addXY ("l"); }
+  }
+
+  public void vlineto (double stack[], int stackDepth) {
+    for (int i = 0; i &lt; stackDepth; i++) {
+      if (i % 2 == 1) {
+	x += stack [i]; }
+      else {
+	y += stack [i]; }
+      addXY ("l"); }
+  }
+
+  public void rrcurveto (double stack[], int stackDepth) {
+    addComment ("rrcurveto " + stackDepth);
+    for (int i = 0; i &lt; stackDepth; i += 6) {
+      x += stack [i];
+      y += stack [i+1];
+      addXY (null);
+      x += stack [i+2];
+      y += stack [i+3];
+      addXY (null);
+      x += stack [i+4];
+      y += stack [i+5];
+      addXY ("c"); }
+    addComment ("");
+    }
+
+  public void hhcurveto (double stack[], int stackDepth) {
+    addComment ("hhcurveto " + stackDepth);
+    int i = 0;
+    if (stackDepth % 2 == 1) {
+      y += stack [i++]; }
+    while (i &lt; stackDepth) {
+      x += stack [i++];
+      addXY (null);;
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      addXY ("c"); }
+    addComment ("");
+    }
+
+  public void hvcurveto (double stack[], int stackDepth) {
+    addComment ("hvcurveto " + stackDepth);
+    int i = 0;
+    if (stackDepth % 8 == 4 || stackDepth % 8 == 5) {
+      x += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      y += stack [i++];
+      if (i + 1 == stackDepth) {
+	x += stack [i++]; }
+      addXY ("c");
+
+      while (i + 8 &lt;= stackDepth) {
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	addXY ("c");
+
+	x += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	y += stack [i++];
+	if (i + 1 == stackDepth) {
+	  x += stack [i++]; }
+	addXY ("c"); }}
+
+    else {
+      while (i + 8 &lt;= stackDepth) {
+	x += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	y += stack [i++];
+	addXY ("c");
+
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	if (i + 1 == stackDepth) {
+	  y += stack [i++]; }
+	addXY ("c"); }}
+    addComment ("");
+  }
+
+  public void rcurveline (double stack[], int stackDepth) {
+    addComment ("rcurveline " + stackDepth);
+    int i = 0;
+    while (i + 6 &lt;= stackDepth) {
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      y += stack [i++];
+      addXY ("c"); }
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY ("l");
+
+    addComment ("");
+  }
+
+  public void rlinecurve (double stack[], int stackDepth) {
+    addComment ("rlinecurve " + stackDepth);
+    int i = 0;
+    while (i + 6 &lt; stackDepth) {
+      x += stack [i++];
+      y += stack [i++];
+      addXY ("l"); }
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY ("c");
+
+    addComment ("");
+    }
+
+  public void vvcurveto (double stack[], int stackDepth) {
+    addComment ("vvcurveto " + stackDepth);
+    int i = 0;
+    if (stackDepth % 2 == 1) {
+      x += stack [i++]; }
+    while (i &lt; stackDepth) {
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      y += stack [i++];
+      addXY ("c"); }
+    addComment ("");
+  }
+
+  public void vhcurveto (double stack[], int stackDepth) {
+    addComment ("vhcurveto " + stackDepth);
+    int i = 0;
+    if (stackDepth % 8 == 4 || stackDepth % 8 == 5) {
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      y += stack [i++];
+      addXY (null);
+      x += stack [i++];
+      if (i + 1 == stackDepth) {
+	y += stack [i++]; }
+      addXY ("c");
+
+      while (i + 8 &lt;= stackDepth) {
+	x += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	y += stack [i++];
+	addXY ("c");
+
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	if (i + 1 == stackDepth) {
+	  y += stack [i++]; }
+	addXY ("c"); }}
+
+    else {
+      while (i + 8 &lt;= stackDepth) {
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	addXY ("c");
+
+	x += stack [i++];
+	addXY (null);
+	x += stack [i++];
+	y += stack [i++];
+	addXY (null);
+	y += stack [i++];
+	if (i + 1 == stackDepth) {
+	  x += stack [i++]; }
+	addXY ("c"); }}
+    addComment ("");
+  }
+
+  public void hflex (double stack[], int stackDepth) {
+    int i = 0;
+    addComment ("hflex");
+
+    x += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    addXY ("c");
+
+    x += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    addXY ("c");
+
+    addComment ("");
+    }
+
+  public void flex (double stack[], int stackDepth) {
+    int i = 0;
+    addComment ("flex");
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY ("c");
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY ("c");
+
+    addComment ("");
+    }
+
+  public void hflex1 (double stack[], int stackDepth) {
+    int i = 0;
+    addComment ("hflex1");
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    addXY ("c");
+
+    x += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    addXY ("c");
+
+    addComment ("");
+    }
+
+  public void flex1 (double stack[], int stackDepth) {
+    int i = 0;
+    addComment ("flex1");
+
+    double startx = x;
+    double starty = y;
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY ("c");
+
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    x += stack [i++];
+    y += stack [i++];
+    addXY (null);
+    if (Math.abs (x - startx) > Math.abs (y - starty)) {
+      x += stack [i++]; }
+    else {
+      y += stack [i++]; }
+    addXY ("c");
+
+    addComment ("");
+  }
+}
+</code-fragment>
+  </section>
+
+  <!--========================================================================-->
+  <section>
+    <title>Type2BoundingBox</title>
+
+    <para>This consumer interprets a Type 2 charstring to compute a
+      bounding box for the outline.</para>
+
+<code-fragment package='com.adobe.aots.opentype' class='Type2BoundingBox'>
+  <code-title>Type2Bounding class</code-title>
+package com.adobe.aots.opentype;
+
+public class Type2BoundingBox extends Type2LinesAndCurves {
+  public BoundingBox bb;
+
+  Type2BoundingBox () {
+    this.x = 0;
+    this.y = 0;
+    this.bb = new BoundingBox ();
+    this.bb.xmin = Double.POSITIVE_INFINITY;
+    this.bb.ymin = Double.POSITIVE_INFINITY;
+
+    this.bb.xmax = Double.NEGATIVE_INFINITY;
+    this.bb.ymax = Double.NEGATIVE_INFINITY;
+  }
+
+  public void moveTo (double x, double y) {
+  }
+
+  public void includeXY (double x, double y) {
+    if (x &lt; bb.xmin) {
+      bb.xmin = x; }
+    if (bb.xmax &lt; x) {
+      bb.xmax = x; }
+    if (y &lt; bb.ymin) {
+      bb.ymin = y; }
+    if (bb.ymax &lt; y) {
+      bb.ymax = y; }
+  }
+
+  public void line (double x1, double y1, double x2, double y2) {
+    includeXY (x1, y1);
+    includeXY (x2, y2);
+  }
+
+  public void curve (double x1, double y1, double x2, double y2,
+                     double x3, double y3, double x4, double y4) {
+    includeXY (x1, y1);
+    includeXY (x4, y4);
+
+      //TODO: for now, go by the convex hull of the four points
+      // need to improve that
+    includeXY (x2, y2);
+    includeXY (x3, y3);
+  }
+
+}
+</code-fragment>
+  </section>
+
+</article>
