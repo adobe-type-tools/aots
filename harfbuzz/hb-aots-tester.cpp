@@ -18,7 +18,7 @@ ____________________________________________________________________________*/
 #include "stdlib.h"
 #include "stdio.h"
 #include "hb.h"
-#include "hb-ot-font.h"
+#include "hb-ot.h"
 
 static const bool verbose = true;
 
