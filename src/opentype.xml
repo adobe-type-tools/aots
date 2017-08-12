@@ -24844,6 +24844,8 @@ public abstract class LookupTable extends LayoutTable {
     if (type == 0) {
       type = Integer.parseInt (t.getAttribute ("type")); }
     int lookupFlag = 0;
+    if ("yes".equals (t.getAttribute ("rightToleft"))) {
+      lookupFlag |= 0x0001; }
     if ("yes".equals (t.getAttribute ("ignoreBaseGlyphs"))) {
       lookupFlag |= 0x0002; }
     if ("yes".equals (t.getAttribute ("ignoreLigatures"))) {
@@ -25027,17 +25029,17 @@ public abstract class LookupTable extends LayoutTable {
 
     int lookupFlag = getuint16 (offset + 2);
     if ((lookupFlag &amp; 0x0001) != 0) {
-    at.addAttribute ("", "rightToLeft", "rightToLeft", "CDATA",
-                     ((lookupFlag &amp; 0x0001) != 0) ? "yes" : "no");  }
+      at.addAttribute ("", "rightToLeft", "rightToLeft", "CDATA",
+                       ((lookupFlag &amp; 0x0001) != 0) ? "yes" : "no");  }
     if ((lookupFlag &amp; 0x0002) != 0) {
-    at.addAttribute ("", "ignoreBaseGlyphs", "ignoreBaseGlyphs", "CDATA",
-                     ((lookupFlag &amp; 0x0002) != 0) ? "yes" : "no"); }
+      at.addAttribute ("", "ignoreBaseGlyphs", "ignoreBaseGlyphs", "CDATA",
+                       ((lookupFlag &amp; 0x0002) != 0) ? "yes" : "no"); }
     if ((lookupFlag &amp; 0x0004) != 0) {
-    at.addAttribute ("", "ignoreLigatures", "ignoreLigatures", "CDATA",
-		     ((lookupFlag &amp; 0x0004) != 0) ? "yes" : "no"); }
+      at.addAttribute ("", "ignoreLigatures", "ignoreLigatures", "CDATA",
+                       ((lookupFlag &amp; 0x0004) != 0) ? "yes" : "no"); }
     if ((lookupFlag &amp; 0x0008) != 0) {
-    at.addAttribute ("", "ignoreMarks", "ignoreMarks", "CDATA",
-                     ((lookupFlag &amp; 0x0008) != 0) ? "yes" : "no"); }
+      at.addAttribute ("", "ignoreMarks", "ignoreMarks", "CDATA",
+                       ((lookupFlag &amp; 0x0008) != 0) ? "yes" : "no"); }
     if ((lookupFlag &amp; 0xFF00) != 0) {
       at.addAttribute ("", "markAttachmentType", "markAttachmentType",
                        "CDATA", "" + ((lookupFlag >> 8) &amp; 0xff)); }
