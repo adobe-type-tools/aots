@@ -324,6 +324,7 @@ start =
     base-font?,
     (BASE?
      &amp; CFF?
+     &amp; glyf?
      &amp; DSIG?
      &amp; GDEF?
      &amp; GPOS?
@@ -1288,6 +1289,10 @@ public class Decompiler {
   protected final void setUSHORT (int offset, int v) {
     data [offset]   = (byte) ((v >> 8) &amp; 0xff);
     data [offset+1] = (byte) ((v     ) &amp; 0xff);
+  }
+
+  protected final int getint8 (int offset) {
+    return getBYTE (offset);
   }
 
   protected final int getuint8 (int offset) {
@@ -17641,7 +17646,7 @@ os2_upperOpticalPointSize =
 
 <code-fragment id='os2.methods'>
   <code-title>?</code-title>
-  public static final int[] tableSize = {78, 86, 96, 96, 96, 100 }; 
+  public static final int[] tableSize = {78, 86, 96, 96, 96, 100 };
 
   public void fromXML (Element os2)
       throws InvalidFontException, UnsupportedFontException {
@@ -21080,15 +21085,92 @@ public class Post extends Table {
           <ottable>head</ottable> table.</para>
       </section>
 
+      <!--________________________________________________________________-->
+      <section role='xml-representation'>
+        <title>XML Representation</title>
+
+<code-fragment id='schema'>
+  <code-title>Relax Schema for glyf table</code-title>
+glyf =
+  element glyf {
+    ( simple_glyph | empty_glyph | composite_glyph )*
+  }
+
+empty_glyph =
+  element empty_glyph {
+    attribute gid { text } }
+
+glyph_attributes =
+  attribute gid { text },
+  attribute xMin { text },
+  attribute yMin { text },
+  attribute xMax { text },
+  attribute yMax { text }
+
+</code-fragment>
+      </section>
+
       <!--____________________________________________________________________-->
       <section role='compiler'>
         <title>Compiler</title>
 
 <code-fragment id='glyf.methods'>
-  public void fromXML (Element cmap)
+  <code-title>Compilation methods</code-title>
+  public void fromXML (Element glyf)
       throws InvalidFontException, UnsupportedFontException {
 
-      //TODO
+      NodeList l = glyf.getChildNodes ();
+
+      int glyfSize = 0;
+
+      Block glyphs [] = new Block [l.getLength ()];
+
+      for (int gid = 0; gid &lt; l.getLength (); gid++) {
+        Element e = (Element) l.item (gid);
+        if ("simple_glyph".equals (e.getTagName ())) {
+          glyphs [gid] = simpleGlyphFromXML (e); }
+        else if ("composite_glyph".equals (e.getTagName ())) {
+          glyphs [gid] = compositeGlyphFromXML (e); }
+        else if ("empty_glyph".equals (e.getTagName ())) {
+          glyphs [gid] = new Block (0, 0); }
+        glyfSize += glyphs [gid].content.length; }
+
+      data = new byte [glyfSize];
+
+      boolean shortLoca;
+
+      if (font.loca == null) {
+        font.loca = new Loca (font);
+        font.tables.put (Tag.loca, font.loca); }
+
+      if (glyfSize / 2 &lt; 65536) {
+        shortLoca = true;
+        font.head.setIndexToLocFormat (0);
+        font.loca.data = new byte [(l.getLength () + 1) * 2]; }
+      else {
+        shortLoca = false;
+        font.head.setIndexToLocFormat (1);
+        font.loca.data = new byte [(l.getLength () + 1) * 4]; }
+
+      int offset = 0;
+
+      for (int gid = 0; gid &lt; l.getLength (); gid++) {
+        Element e = (Element) l.item (gid);
+
+        if (shortLoca) {
+          font.loca.setUSHORT (2 * gid, offset / 2); }
+        else {
+          font.loca.setuint32 (4 * gid, offset); }
+
+        int s = glyphs [gid].content.length;
+        System.arraycopy (glyphs [gid].content, 0,
+                         data, offset, s);
+        offset += s; }
+
+      if (shortLoca) {
+        font.loca.setUSHORT (2 * l.getLength (), offset / 2); }
+      else {
+        font.loca.setuint32 (4 * l.getLength (), offset); }
   }
 </code-fragment>
       </section>
@@ -21098,10 +21180,45 @@ public class Post extends Table {
         <title>Decompiler</title>
 
 <code-fragment id='glyf.methods'>
+  <code-title>Decompilation methods</code-title>
   public void toXML (DecompilerConfig conf)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-      //TODO
+      int numGlyphs = font.maxp.getNumGlyphs ();
+
+      conf.ch.startElement ("glyf");
+
+      for (int gid = 0; gid &lt; numGlyphs; gid++) {
+        AttributesImpl at = new AttributesImpl ();
+        at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
+
+        int offset = (int) font.loca.getGlyphLocation (gid);
+        int offset2 = (int) font.loca.getGlyphLocation (gid + 1);
+
+        if (offset == offset2) {
+          conf.ch.element ("empty_glyph", at);
+          continue; }
+
+        int nbContours = getSHORT (offset);
+
+        at.addAttribute ("", "xMin", "xMin", "CDATA", "" + getSHORT (offset + 2));
+        at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getSHORT (offset + 4));
+        at.addAttribute ("", "xMax", "xMax", "CDATA", "" + getSHORT (offset + 6));
+        at.addAttribute ("", "yMax", "yMax", "CDATA", "" + getSHORT (offset + 8));
+
+        offset += 10;
+
+        if (nbContours &lt; 0) {
+          conf.ch.startElement ("composite_glyph", at);
+          compositeGlyphToXML (conf, offset);
+          conf.ch.endElement ("composite_glyph"); }
+
+        else {
+          conf.ch.startElement ("simple_glyph", at);
+          simpleGlyphToXML (conf, offset, nbContours);
+          conf.ch.endElement ("simple_glyph"); }}
+
+      conf.ch.endElement ("glyf");
   }
 </code-fragment>
       </section>
@@ -21307,6 +21424,309 @@ public class Glyf extends Table {
             </tbody>
           </tgroup>
         </informaltable>
+      </section>
+
+      <!--________________________________________________________________-->
+      <section role='xml-representation'>
+        <title>XML Representation</title>
+
+<code-fragment id='schema'>
+  <code-title>Relax Schema for glyf table</code-title>
+simple_glyph =
+  element simple_glyph {
+    glyph_attributes,
+    element contour {
+      element point {
+        attribute on_curve { yesOrNo },
+        attribute x { text },
+        attribute y { text } }+ } +,
+
+    element instructions {
+      attribute opcodes { text }} ?
+  }
+</code-fragment>
+      </section>
+
+      <!--____________________________________________________________________-->
+      <section role='compiler'>
+        <title>Compiler</title>
+
+<code-fragment id='glyf.methods'>
+  public Block simpleGlyphFromXML (Element e) {
+
+    NodeList contours = e.getChildNodes ();
+    int nbContours = contours.getLength ();
+
+    Element instructionsElt = (Element) contours.item (nbContours - 1);
+    Block instructions;
+
+    if ("instructions".equals (instructionsElt.getTagName())) {
+      nbContours--;
+      int opcodes [] = parseIntList (instructionsElt.getAttribute ("opcodes"));
+      instructions = new Block (opcodes.length, 0);
+      for (int i = 0; i &lt; opcodes.length; i++) {
+        instructions.setBYTE (i, opcodes [i]); }}
+    else {
+      instructions = new Block (0, 0); }
+
+    int nbTotalPoints = 0;
+    for (int c = 0; c &lt; nbContours; c++) {
+       Element contour = (Element) contours.item (c);
+       NodeList points = (NodeList) contour.getChildNodes ();
+       nbTotalPoints += points.getLength (); }
+
+    int endPts []  = new int [nbContours];
+
+    // pessimistic allocation
+    Block flags = new Block (nbTotalPoints, 0);
+    int flagsOffset = 0;
+    Block x = new Block (nbTotalPoints * 2, 0);
+    int xOffset = 0;
+    Block y = new Block (nbTotalPoints * 2, 0);
+    int yOffset = 0;
+
+
+    int currentPoint = 0;
+    int currentX = 0;
+    int currentY = 0;
+
+    int lastFlags = 0;
+    boolean lastFlagsRepeat = false;
+    int lastFlagsCount = 0;
+
+    for (int c = 0; c &lt; nbContours; c++) {
+       Element contour = (Element) contours.item (c);
+
+       NodeList points = (NodeList) contour.getChildNodes ();
+       int nbPoints = points.getLength ();
+
+       for (int p = 0; p &lt; nbPoints; p++) {
+         Element point = (Element) points.item (p);
+         int thisX = Integer.parseInt (point.getAttribute ("x"));
+         int thisY = Integer.parseInt (point.getAttribute ("y"));
+
+         int thisFlags = 0;
+
+         if ("yes".equals (point.getAttribute ("on_curve"))) {
+           thisFlags |= ON_CURVE_POINT; }
+
+         int delta_x = thisX - currentX;
+         if (delta_x == 0) {
+           thisFlags |= X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR; }
+         else if (-255 &lt;= delta_x &amp;&amp; delta_x &lt;= 255) {
+           thisFlags |= X_SHORT_VECTOR;
+           if (0 &lt; delta_x) {
+             thisFlags |= X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR; }
+           else {
+             delta_x = - delta_x; }
+           x.setByte (xOffset, delta_x);
+           xOffset += 1; }
+         else {
+           x.setint16 (xOffset, delta_x);
+           xOffset += 2; }
+
+         currentX = thisX;
+
+         int delta_y = thisY - currentY;
+         if (delta_y == 0) {
+           thisFlags |= Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR; }
+         else if (-255 &lt;= delta_y &amp;&amp; delta_y &lt;= 255) {
+           thisFlags |= Y_SHORT_VECTOR;
+           if (0 &lt; delta_y) {
+             thisFlags |= Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR; }
+           else {
+             delta_y = - delta_y; }
+           y.setByte (yOffset, delta_y);
+           yOffset += 1; }
+         else {
+           y.setint16 (yOffset, delta_y);
+           yOffset += 2; }
+
+         currentY = thisY;
+
+         if (0 &lt; flagsOffset  &amp;&amp; thisFlags == lastFlags) {
+           if (lastFlagsRepeat) {
+             if (lastFlagsCount &lt; 255) {
+               lastFlagsCount++;
+               flags.setByte (flagsOffset - 1, lastFlagsCount); }
+             else {
+               flags.setByte (flagsOffset, thisFlags);
+               flagsOffset += 1;
+               lastFlagsRepeat = false;
+               lastFlagsCount = 0; }}
+           else {
+             flags.setByte (flagsOffset - 1, lastFlags | REPEAT_FLAG);
+             flags.setByte (flagsOffset, 1);
+             flagsOffset += 1;
+             lastFlagsRepeat = true;
+             lastFlagsCount = 1; }}
+         else {
+           flags.setByte (flagsOffset, thisFlags);
+           flagsOffset += 1;
+           lastFlagsRepeat = false;
+           lastFlagsCount = 0; }
+
+         lastFlags = thisFlags; }
+
+      endPts [c] = ((c == 0) ? -1 : endPts [c - 1]) + nbPoints; }
+
+
+    int totalSize = 10
+                     + endPts.length * 2
+                     + 2 + instructions.content.length
+                     + flagsOffset + xOffset + yOffset;
+
+    if (totalSize % 2 == 1) {
+      totalSize++; }
+
+    Block result = new Block (totalSize, 0);
+    int b = 0;
+
+    result.setuint16 (b, nbContours); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("xMin"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("yMin"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("xMax"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("yMax"))); b += 2;
+
+    for (int c = 0; c &lt; nbContours; c++) {
+      result.setuint16 (b, endPts [c]); b += 2; }
+
+    if (instructions == null) {
+      result.setuint16 (b, 0); b += 2; }
+    else {
+      result.setuint16 (b, instructions.content.length); b += 2;
+      System.arraycopy (instructions.content, 0,
+                        result.content, b,
+                        instructions.content.length);
+      b += instructions.content.length; }
+
+    System.arraycopy (flags.content, 0, result.content, b, flagsOffset);
+    b += flagsOffset;
+
+    System.arraycopy (x.content, 0, result.content, b, xOffset);
+    b += xOffset;
+
+    System.arraycopy (y.content, 0, result.content, b, yOffset);
+    b += yOffset;
+
+    return result;
+  }
+</code-fragment>
+      </section>
+
+      <!--____________________________________________________________________-->
+      <section role='decompiler'>
+        <title>Decompiler</title>
+
+<code-fragment id='glyf.methods'>
+  public void simpleGlyphToXML (DecompilerConfig conf,
+                                int offset,
+                                int nbContours)
+      throws org.xml.sax.SAXException, InvalidFontException {
+
+      int endPts[] = new int [nbContours];
+      for (int i = 0; i &lt; nbContours; i++) {
+        endPts [i] = getuint16 (offset); offset += 2; }
+
+      int nbPts = endPts [nbContours - 1] + 1;
+
+      int numInstr = getUSHORT (offset); offset += 2;
+      String opcodes = "";
+      String prefix = "";
+      for (int i = 0; i &lt; numInstr; i++) {
+        opcodes += prefix + "0x" + Integer.toHexString (getBYTE (offset));
+        offset += 1;
+        prefix = " "; }
+
+      int flags[] = new int [nbPts];
+      int repeat = 0;
+      int f = 0;
+
+      for (int i = 0; i &lt; nbPts; i++) {
+        if (repeat == 0) {
+          f = getuint8 (offset); offset++;
+          repeat = 0;
+          if ((f &amp; REPEAT_FLAG) != 0) {
+            repeat = getuint8 (offset); offset++; }}
+        else {
+          repeat--; }
+        flags [i] = f; }
+
+      int x [] = new int [nbPts];
+      int current_x = 0;
+
+      for (int i = 0; i &lt; nbPts; i++) {
+        if ((flags [i] &amp; X_SHORT_VECTOR) != 0) {
+          int xOffset = getuint8 (offset); offset += 1;
+          if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) == 0) {
+            xOffset = - xOffset; }
+          current_x += xOffset; }
+
+        else if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) != 0) {
+          /* same */ }
+
+        else {
+          current_x += getint16 (offset); offset += 2; }
+
+        x [i] = current_x; }
+
+      int y [] = new int [nbPts];
+      int current_y = 0;
+
+      for (int i = 0; i &lt; nbPts; i++) {
+        if ((flags [i] &amp; Y_SHORT_VECTOR) != 0) {
+          int yOffset = getuint8 (offset); offset += 1;
+          if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) == 0) {
+            yOffset = - yOffset; }
+          current_y += yOffset; }
+
+        else if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) != 0) {
+          /* same */ }
+
+        else {
+          current_y += getint16 (offset); offset += 2; }
+
+        y [i] = current_y; }
+
+      int pt = 0;
+      for (int c = 0; c &lt; nbContours; c++) {
+        conf.ch.startElement ("contour");
+
+        while (pt &lt;= endPts [c]) {
+
+          AttributesImpl at = new AttributesImpl ();
+          at.addAttribute ("", "on_curve", "on_curve", "CDATA",
+                           (flags [pt] &amp; ON_CURVE_POINT) != 0
+                           ? "yes" : "no");
+          at.addAttribute ("", "x", "x", "CDATA", Integer.toString (x [pt]));
+          at.addAttribute ("", "y", "y", "CDATA", Integer.toString (y [pt]));
+
+          conf.ch.element ("point", at);
+          pt++; }
+
+        conf.ch.endElement ("contour"); }
+
+      if (numInstr != 0) {
+        AttributesImpl at = new AttributesImpl ();
+        at.addAttribute ("", "opcodes", "opcodes", "CDATA", opcodes);
+        conf.ch.element ("instructions", at); }
+  }
+</code-fragment>
+      </section>
+
+      <!--________________________________________________________________-->
+      <section role='implementation'>
+        <title>Implementation</title>
+
+<code-fragment id='glyf.methods'>
+  <code-title>Glyf methods</code-title>
+  public static final int ON_CURVE_POINT                       = 0x0001;
+  public static final int X_SHORT_VECTOR                       = 0x0002;
+  public static final int Y_SHORT_VECTOR                       = 0x0004;
+  public static final int REPEAT_FLAG                          = 0x0008;
+  public static final int X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR = 0x0010;
+  public static final int Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR = 0x0020;
+</code-fragment>
       </section>
     </section>
 
@@ -21522,7 +21942,271 @@ if (flags & WE_HAVE_INSTR){
         <para>Note that the behavior of the USE_MY_METRICS operation
           is undefined for rotated composite components.</para>
 
+      </section>
 
+      <!--________________________________________________________________-->
+      <section role='xml-representation'>
+        <title>XML Representation</title>
+
+<code-fragment id='schema'>
+  <code-title>Relax Schema for glyf table</code-title>
+composite_glyph =
+  element composite_glyph {
+    glyph_attributes,
+    element component {
+      attribute flags { text },
+      attribute gid { text },
+      attribute arg1 { text },
+      attribute arg2 { text },
+      component_scale? } +,
+
+    element instructions {
+      attribute opcodes { text }} ?
+  }
+
+component_scale |=
+   attribute scale { text ? }
+
+component_scale |=
+   attribute xscale { text ? },
+   attribute yscale { text ? }
+
+component_scale |=
+   attribute xscale { text ? },
+   attribute scale01 { text ? },
+   attribute scale10 { text ? },
+   attribute yscale { text ? }
+
+</code-fragment>
+      </section>
+
+      <!--____________________________________________________________________-->
+      <section role='compiler'>
+        <title>Compiler</title>
+
+<code-fragment id='glyf.methods'>
+  public Block compositeGlyphFromXML (Element e) {
+
+    NodeList components = e.getChildNodes ();
+    int nbComponents = components.getLength ();
+
+    Element instructionsElt = (Element) components.item (nbComponents - 1);
+    Block instructions;
+
+    if ("instructions".equals (instructionsElt.getTagName())) {
+      nbComponents--;
+      int opcodes [] = parseIntList (instructionsElt.getAttribute ("opcodes"));
+      instructions = new Block (opcodes.length, 0);
+      for (int i = 0; i &lt; opcodes.length; i++) {
+        instructions.setBYTE (i, opcodes [i]); }}
+    else {
+      instructions = new Block (0, 0); }
+
+    // pessimistic allocation
+    Block data = new Block (10 + nbComponents * (4 + 4 + 8), 0);
+    int dataOffset = 0;
+
+    for (int c = 0; c &lt; nbComponents; c++) {
+      Element component = (Element) components.item (c);
+
+      int flags = Integer.decode (component.getAttribute ("flags"));
+      int gid = Integer.decode (component.getAttribute ("gid"));
+      int arg1 = Integer.decode (component.getAttribute ("arg1"));
+      int arg2 = Integer.decode (component.getAttribute ("arg2"));
+
+      int xscale = 1 &lt;&lt; 14;
+      int scale01 = 0;
+      int scale10 = 0;
+      int yscale = 1 &lt;&lt; 14;
+
+      if (component.getAttribute ("scale") != null
+          &amp;&amp; ! "".equals (component.getAttribute ("scale"))) {
+        xscale = Integer.parseInt (component.getAttribute ("scale"));
+        yscale = xscale; }
+
+      if (component.getAttribute ("xscale") != null
+          &amp;&amp; ! "".equals (component.getAttribute ("xscale"))) {
+        xscale = Integer.parseInt (component.getAttribute ("xscale")); }
+
+      if (component.getAttribute ("scale01") != null
+          &amp;&amp; ! "".equals (component.getAttribute ("scale01"))) {
+        scale01 = Integer.parseInt (component.getAttribute ("scale01")); }
+
+      if (component.getAttribute ("scale10") != null
+          &amp;&amp; ! "".equals (component.getAttribute ("scale10"))) {
+        scale10 = Integer.parseInt (component.getAttribute ("scale10")); }
+
+      if (component.getAttribute ("yscale") != null
+          &amp;&amp; ! "".equals (component.getAttribute ("yscale"))) {
+        yscale = Integer.parseInt (component.getAttribute ("yscale")); }
+
+
+      int flagsOffset = dataOffset;
+      dataOffset += 2;
+
+      data.setuint16 (dataOffset, gid); dataOffset += 2;
+
+      if (256 &lt; arg1 || 256 &lt; arg2) {
+        flags |= ARG_1_AND_2_ARE_WORDS;
+        data.setint16 (dataOffset, arg1); dataOffset += 2;
+        data.setint16 (dataOffset, arg2); dataOffset += 2; }
+      else {
+        data.setBYTE (dataOffset, arg1); dataOffset += 1;
+        data.setBYTE (dataOffset, arg2); dataOffset += 1; }
+
+      if (scale01 != 0 || scale10 != 0) {
+        flags |= WE_HAVE_A_TWO_BY_TWO;
+        data.setuint16 (dataOffset, xscale); dataOffset += 2;
+        data.setuint16 (dataOffset, scale01); dataOffset += 2;
+        data.setuint16 (dataOffset, scale10); dataOffset += 2;
+        data.setuint16 (dataOffset, yscale); dataOffset += 2; }
+
+      else if (xscale != yscale) {
+        flags |= WE_HAVE_AN_X_AND_Y_SCALE;
+        data.setuint16 (dataOffset, xscale); dataOffset += 2;
+        data.setuint16 (dataOffset, yscale); dataOffset += 2; }
+
+      else if (xscale != 1 &lt;&lt;14) {
+        flags |= WE_HAVE_A_SCALE;
+        data.setuint16 (dataOffset, xscale); dataOffset += 2; }
+
+      if (c &lt; nbComponents - 1) {
+        flags |= MORE_COMPONENTS; }
+
+      if (instructions.content.length > 0) {
+        flags |= WE_HAVE_INSTRUCTIONS; }
+
+      data.setuint16 (flagsOffset, flags); }
+
+    int totalSize = 10 + dataOffset;
+    if (instructions.content.length > 0) {
+      totalSize += 2 + instructions.content.length; }
+
+    if (totalSize % 2 == 1) {
+      totalSize++; }
+
+    Block result = new Block (totalSize, 0);
+    int b = 0;
+
+    result.setint16 (b, -1); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("xMin"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("yMin"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("xMax"))); b += 2;
+    result.setint16 (b, Integer.parseInt (e.getAttribute ("yMax"))); b += 2;
+
+    for (int i = 0; i &lt; dataOffset; i++) {
+      result.setBYTE (b, data.content [i]); b++; }
+
+    if (instructions.content.length > 0) {
+      result.setuint16 (b, instructions.content.length); b += 2;
+
+      System.arraycopy (instructions.content, 0,
+                        result.content, b,
+                        instructions.content.length);
+
+      b += instructions.content.length; }
+
+    return result;
+  }
+</code-fragment>
+      </section>
+
+      <!--____________________________________________________________________-->
+      <section role='decompiler'>
+        <title>Decompiler</title>
+
+<code-fragment id='glyf.methods'>
+  public void compositeGlyphToXML (DecompilerConfig conf, int offset)
+      throws org.xml.sax.SAXException, InvalidFontException {
+
+      boolean we_have_instructions = false;
+
+      while (true) {
+        AttributesImpl at = new AttributesImpl ();
+
+        int flags = getUSHORT (offset);
+        at.addAttribute ("", "flags", "flags", "CDATA",
+                         "0x" + Integer.toHexString (flags &amp; 0x1e04));
+        offset += 2;
+
+        we_have_instructions |= ((flags &amp; WE_HAVE_INSTRUCTIONS) != 0);
+
+        int gid = getGlyphID (offset);
+        at.addAttribute ("", "gid", "gid", "CDATA",
+                         Integer.toString (gid));
+        offset += 2;
+
+        int arg1, arg2;
+        if ((flags &amp; ARG_1_AND_2_ARE_WORDS) != 0) {
+          if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
+            arg1 = getint16 (offset); offset += 2;
+            arg2 = getint16 (offset); offset += 2; }
+          else {
+            arg1 = getuint16 (offset); offset += 2;
+            arg2 = getuint16 (offset); offset += 2; }}
+        else {
+          if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
+            arg1 = getint8 (offset); offset += 1;
+            arg2 = getint8 (offset); offset += 1; }
+          else {
+            arg1 = getuint8 (offset); offset += 1;
+            arg2 = getuint8 (offset); offset += 1; }}
+
+        at.addAttribute ("", "arg1", "arg1", "CDATA",
+                         Integer.toString (arg1));
+        at.addAttribute ("", "arg2", "arg2", "CDATA",
+                         Integer.toString (arg2));
+
+        if ((flags &amp; WE_HAVE_A_SCALE) != 0) {
+          int scale = getFWord (offset); offset += 2;
+          at.addAttribute ("", "scale", "scale", "CDATA",
+                           Integer.toString (scale)); }
+
+        else if ((flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+          int xscale = getFWord (offset); offset += 2;
+          int yscale = getFWord (offset); offset += 2;
+          at.addAttribute ("", "xscale", "xscale", "CDATA",
+                           Integer.toString (xscale));
+          at.addAttribute ("", "yscale", "yscale", "CDATA",
+                           Integer.toString (yscale)); }
+
+
+        else if ((flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
+          int xscale = getFWord (offset); offset += 2;
+          int scale01 = getFWord (offset); offset += 2;
+          int scale10 = getFWord (offset); offset += 2;
+          int yscale = getFWord (offset); offset += 2;
+
+          at.addAttribute ("", "xscale", "xscale", "CDATA",
+                           Integer.toString (xscale));
+          at.addAttribute ("", "scale01", "scale01", "CDATA",
+                           Integer.toString (scale01));
+          at.addAttribute ("", "scale10", "scale10", "CDATA",
+                           Integer.toString (scale10));
+          at.addAttribute ("", "yscale", "yscale", "CDATA",
+                           Integer.toString (yscale)); }
+
+        conf.ch.element ("component", at);
+
+        if ((flags &amp; MORE_COMPONENTS) == 0) {
+          break; }}
+
+      if (we_have_instructions) {
+        int numInstr = getUSHORT (offset); offset += 2;
+        String opcodes = "";
+        String prefix = "";
+        for (int i = 0; i &lt; numInstr; i++) {
+          opcodes += prefix + "0x" + Integer.toString (getBYTE (offset));
+          offset += 1;
+          prefix = " "; }
+
+        AttributesImpl at = new AttributesImpl ();
+        at.addAttribute ("", "opcodes", "opcodes", "CDATA",
+                         opcodes);
+
+        conf.ch.element ("instructions", at); }
+  }
+</code-fragment>
       </section>
 
       <!--________________________________________________________________-->
@@ -21532,7 +22216,7 @@ if (flags & WE_HAVE_INSTR){
 <code-fragment id='glyf.methods'>
   <code-title>Glyf methods</code-title>
   public static final int ARG_1_AND_2_ARE_WORDS      = 0x0001;
-  public static final int ARGS_ARE_XY_VALUES_WORDS   = 0x0002;
+  public static final int ARGS_ARE_XY_VALUES         = 0x0002;
   public static final int ROUND_XY_TO_GRID           = 0x0004;
   public static final int WE_HAVE_A_SCALE            = 0x0008;
   public static final int MORE_COMPONENTS            = 0x0020;
@@ -82067,7 +82751,6 @@ public class Font {
         else if (tag == Tag.os2 ) { t = os2  = new OS2  (this); }
         else if (tag == Tag.post) { t = post = new Post (this); }
         else if (tag == Tag.maxp) { t = maxp = new Maxp (this); }
-        else if (tag == Tag.loca) { t = loca = new Loca (this); }
         else if (tag == Tag.glyf) { t = glyf = new Glyf (this); }
         else if (tag == Tag.CFF ) { t = cff  = new CFF  (this); }
         else if (tag == Tag.BASE) { t = base = new Base (this); }
