@@ -66577,6 +66577,16 @@ public class Vorg extends Table {
     super (Tag.VORG, font);
   }
 
+  public int getVerticalOrigin (int glyphID) {
+    int numVertOriginYMetrics = getUSHORT (6);
+
+    for (int i = 0; i &lt; numVertOriginYMetrics; i++) {
+      if (glyphID == getUSHORT (8 + 4*i)) {
+        return getSHORT (8 + 4*i + 2); }}
+
+    return getSHORT (4);
+  }
+
   <code-include linkend='VORG.methods'/>
 }
 </code-fragment>
