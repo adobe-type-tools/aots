@@ -22046,13 +22046,31 @@ component_scale |=
 
       data.setuint16 (dataOffset, gid); dataOffset += 2;
 
-      if (256 &lt; arg1 || 256 &lt; arg2) {
-        flags |= ARG_1_AND_2_ARE_WORDS;
-        data.setint16 (dataOffset, arg1); dataOffset += 2;
-        data.setint16 (dataOffset, arg2); dataOffset += 2; }
+      // retain only those bits from our input, we will
+      // set the others as needed
+      flags &amp;= ARGS_ARE_XY_VALUES
+            | ROUND_XY_TO_GRID
+            | USE_MY_METRICS
+            | OVERLAP_COMPOUND
+            | SCALED_COMPONENT_OFFSET
+            | UNSCALED_COMPONENT_OFFSET;
+
+      if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
+        if (arg1 &lt; -128 || 127 &lt; arg1 || arg2 &lt; -128 || 127 &lt; arg2 ) {
+          flags |= ARG_1_AND_2_ARE_WORDS;
+          data.setint16 (dataOffset, arg1); dataOffset += 2;
+          data.setint16 (dataOffset, arg2); dataOffset += 2; }
+        else {
+          data.setBYTE (dataOffset, arg1); dataOffset += 1;
+          data.setBYTE (dataOffset, arg2); dataOffset += 1; }}
       else {
-        data.setBYTE (dataOffset, arg1); dataOffset += 1;
-        data.setBYTE (dataOffset, arg2); dataOffset += 1; }
+        if (256 &lt; arg1 || 256 &lt; arg2) {
+          flags |= ARG_1_AND_2_ARE_WORDS;
+          data.setint16 (dataOffset, arg1); dataOffset += 2;
+          data.setint16 (dataOffset, arg2); dataOffset += 2; }
+        else {
+          data.setBYTE (dataOffset, arg1); dataOffset += 1;
+          data.setBYTE (dataOffset, arg2); dataOffset += 1; }}
 
       if (scale01 != 0 || scale10 != 0) {
         flags |= WE_HAVE_A_TWO_BY_TWO;
