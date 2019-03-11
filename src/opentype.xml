@@ -9489,15 +9489,19 @@ pp2 = pp1 + aw
       <section role='xml-representation'>
         <title>XML Representation</title>
 
+        <para>In the XML representation, the various entries can occur in any order, and the long and short metrics can even be interleaved. However, the entries must have distinct gid attribute values, and collectively cover exactly the range [0, n-1]. In a fully valid font, n must of course be equal to the maxp.numGlyphs.</para>
+
 <code-fragment id='schema'>
   <code-title>??</code-title>
 hmtx =
   element hmtx {
     element hMetric {
+      attribute gid { text },
       attribute lsb { text },
       attribute adv { text }
     }*,
     element lsb {
+      attribute gid { text },
       attribute lsb { text }
     }*
   }
@@ -9509,35 +9513,70 @@ hmtx =
         <title>Compiler</title>
 
 <code-fragment id='hmtx.methods'>
+  private class HMetric {
+    int lsb;
+    int adv;
+    boolean hasAdvance;
+
+    public HMetric (int adv, int lsb) {
+      this.adv = adv;
+      this.lsb = lsb;
+      this.hasAdvance = true;
+    }
+
+    public HMetric (int lsb) {
+      this.lsb = lsb;
+      this.hasAdvance = false;
+    }
+  }
+
   public void fromXML (Element hmtx)
     throws InvalidFontException, UnsupportedFontException {
 
     NodeList metrics = hmtx.getChildNodes ();
 
+    HMetric m [] = new HMetric [metrics.getLength ()];
+
     int hmetrics = 0;
     int lsbs = 0;
-    for (int i = 0; i &lt; metrics.getLength (); i++) {
-      Element x = (Element) metrics.item (i);
-      if ("hMetric".equals (x.getTagName ())) {
+
+    for (int i = 0; i &lt; m.length; i++) {
+      Element metric = (Element) metrics.item (i);
+
+      int gid = Integer.decode (metric.getAttribute ("gid"));
+
+      if (m.length &lt;= gid) {
+         throw new InvalidFontException ("htmx: gid " + gid + " is too large"); }
+
+      if (m [gid] != null) {
+        throw new InvalidFontException ("duplicate gid " + gid + " in hmtx"); }
+
+      if ("hMetric".equals (metric.getTagName ())) {
+        m [gid] = new HMetric (Integer.decode (metric.getAttribute ("adv")).intValue (),
+                               Integer.decode (metric.getAttribute ("lsb")).intValue ());
         hmetrics++; }
-      if ("lsb".equals (x.getTagName ())) {
+
+      else if ("lsb".equals (metric.getTagName ())) {
+        m [gid] = new HMetric (Integer.decode (metric.getAttribute ("lsb")).intValue ());
         lsbs++; }}
+
+    // verify that all lsbs are after all hmetric
+    for (int gid = hmetrics; gid &lt; hmetrics + lsbs; gid++) {
+      if (m [gid].hasAdvance) {
+        throw new InvalidFontException ("htmx: gid " + gid + " has advance and is larger that first gid without advance " + hmetrics); }}
 
     Block me = new Block (hmetrics*4 + lsbs*2, 0);
 
     int offset = 0;
-    for (int i = 0; i &lt; metrics.getLength (); i++) {
-      Element metric = (Element) metrics.item (i);
-      if ("hMetric".equals (metric.getTagName ())) {
-        me.setUSHORT (offset,
-                      Integer.decode (metric.getAttribute ("adv")).intValue ());
-        me.setSHORT (offset + 2,
-                     Integer.decode (metric.getAttribute ("lsb")).intValue ());
-        offset += 4; }
-      if ("lsb".equals (metric.getTagName ())) {
-        me.setFWord (offset,
-                     Integer.decode (metric.getAttribute ("lsb")).intValue ());
-        offset += 2; }}
+
+    for (int gid = 0; gid &lt; hmetrics; gid++) {
+      me.setuint16 (offset, m [gid].adv);
+      me.setuint16 (offset + 2, m [gid].lsb);
+      offset += 4; }
+
+    for (int gid = hmetrics; gid &lt; hmetrics + lsbs; gid++) {
+      me.setuint16 (offset, m [gid].lsb);
+      offset += 2; }
 
     data = me.serialize ();
   }
