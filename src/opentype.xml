@@ -21157,14 +21157,12 @@ glyph_attributes =
         AttributesImpl at = new AttributesImpl ();
         at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
 
-        int offset = (int) font.loca.getGlyphLocation (gid);
-        int offset2 = (int) font.loca.getGlyphLocation (gid + 1);
-
-        if (offset == offset2) {
+        if (isEmpty (gid)) {
           conf.ch.element ("empty_glyph", at);
           continue; }
 
-        int nbContours = getSHORT (offset);
+        int offset = (int) font.loca.getGlyphLocation (gid);
+        int nbContours = getint16 (offset);
 
         at.addAttribute ("", "xMin", "xMin", "CDATA", "" + getint16 (offset + 2));
         at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getint16 (offset + 4));
@@ -21216,18 +21214,40 @@ public class Glyf extends Table {
 }
 </code-fragment>
 
+<para>For a given glyph with id g, loca[g] = loca[g+1] indicates
+an empty outline. Similarly loca[g] = sizeof(glyph) for the last glyph.
+This function identifies those situations.</para>
+
+<code-fragment id='glyf.methods'>
+  <code-title>Empty glyf detection</code-title>
+  public boolean isEmpty (int gid) {
+    int offset = (int) font.loca.getGlyphLocation (gid);
+
+    if (gid == font.maxp.getNumGlyphs ()) {
+      return offset >= data.length; }
+    else {
+      return offset == (int) font.loca.getGlyphLocation (gid + 1); }
+  }
+</code-fragment>
+
 	<para>Here is a method to return the bounding box of a glyph given the
 	  offset to glyph header:</para>
 
 <code-fragment id='glyf.methods'>
   <code-title>Glyf methods</code-title>
   public boolean isComposite (int gid) {
+    if (isEmpty (gid)) {
+      return false; }
+
     int offset = (int) font.loca.getGlyphLocation (gid);
     return getint16 (offset) &lt; 0;
   }
 
   public BoundingBox getGlyphBoundingBox (int gid) {
     BoundingBox b = new BoundingBox ();
+
+    if (isEmpty (gid)) {
+      return b; }
 
     int offset = (int)font.loca.getGlyphLocation (gid);
     b.xmin = getint16 (offset + 2);
