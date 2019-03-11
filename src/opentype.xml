@@ -485,7 +485,7 @@ public class Compiler implements org.xml.sax.ErrorHandler {
           subtables. To facilitate the creation of these tables
           blocks, we have a class, named <varname>Block</varname>. The
           main methods are to set fields in blocks
-          (<varname>setSHORT</varname>, <varname>setULONG</varname>,
+          (<varname>setint16</varname>, <varname>setULONG</varname>,
           etc), to make one block point to another one
           (<varname>setOffset</varname>,
           <varname>setBigOffset</varname>), and finally to serialize
@@ -547,20 +547,12 @@ import java.util.Vector;
       content [offset+1] = (byte) (value &amp; 0xff);
     }
 
-    public void setUSHORT (int offset, int value) {
-      setuint16 (offset, value);
-    }
-
-    public void setSHORT (int offset, int value) {
-      setUSHORT (offset, value);
-    }
-
     public void setFWord(int offset, int value) {
       setuint16 (offset, value);
     }
 
     public void setuFWord (int offset, int value) {
-      setUSHORT (offset, value);
+      setuint16 (offset, value);
     }
 
     public void setuint24 (int offset, int value) {
@@ -1284,19 +1276,15 @@ public class Decompiler {
     data [offset] = (byte) (v &amp; 0xff);
   }
 
-  protected final int getUSHORT (int offset) {
+  protected final int getuint16 (int offset) {
     int b1 = ((int)(getuint8 (offset    ))) &lt;&lt;  8;
     int b2 = ((int)(getuint8 (offset + 1)));
     return (b1 | b2);
   }
 
-  protected final void setUSHORT (int offset, int v) {
+  protected final void setuint16 (int offset, int v) {
     data [offset]   = (byte) ((v >> 8) &amp; 0xff);
     data [offset+1] = (byte) ((v     ) &amp; 0xff);
-  }
-
-  protected final int getuint16 (int offset) {
-    return getUSHORT (offset);
   }
 
   protected final int getuint24 (int offset) {
@@ -1307,24 +1295,16 @@ public class Decompiler {
   }
 
   protected final int getGlyphID (int offset) {
-    return getUSHORT (offset);
+    return getuint16 (offset);
   }
 
-  protected final int getSHORT (int offset) {
+  protected final int getint16 (int offset) {
     int x = ((int)data [offset]) * 256;
     return x + getuint8 (offset + 1);
   }
 
-  protected final void setSHORT (int offset, int v) {
-     setUSHORT (offset, v);
-  }
-
-  protected final int getint16 (int offset) {
-    return getSHORT (offset);
-  }
-
   protected final int getOffset (int offset) {
-    return getUSHORT (offset);
+    return getuint16 (offset);
   }
 
   protected final int getOffset (int base, int offset) {
@@ -1387,22 +1367,22 @@ public class Decompiler {
 
   protected final int[] getFixed (int offset) {
     int[] result = new int[2];
-    result[0] = getUSHORT (offset);
-    result[1] = getUSHORT (offset + 2);
+    result[0] = getuint16 (offset);
+    result[1] = getuint16 (offset + 2);
     return result;
   }
 
   protected final void setFixed (int offset, int major, int minor) {
-    setUSHORT (offset, major);
-    setUSHORT (offset + 2, minor);
+    setuint16 (offset, major);
+    setuint16 (offset + 2, minor);
   }
 
   protected final int getFWord (int offset) {
-    return getSHORT (offset);
+    return getint16 (offset);
   }
 
   protected final int getuFWord (int offset) {
-    return getUSHORT (offset);
+    return getuint16 (offset);
   }
 
   protected final long getLONGDATETIME (int offset) {
@@ -1661,8 +1641,8 @@ public class Tag {
 
   private void verifyFixedVersion (byte[] data, int offset, int major, int minor)
     throws UnsupportedVersionException {
-    int actualMajor = getUSHORT (data, offset);
-    int actualMinor = getUSHORT (data, offset+2);
+    int actualMajor = getuint16 (data, offset);
+    int actualMinor = getuint16 (data, offset+2);
 
     if (major != actualMajor || actualMinor &lt; minor) {
       System.out.println ("major = " + major + "/" + actualMajor
@@ -1672,7 +1652,7 @@ public class Tag {
 
   private void verifyUSHORTVersion (byte[] data, int offset, int minor)
     throws UnsupportedVersionException {
-    int actualMinor = getUSHORT (data, offset);
+    int actualMinor = getuint16 (data, offset);
     if (actualMinor &lt; minor) {
       System.out.println ( " minor = " + minor + "/" + actualMinor);
       throw new UnsupportedVersionException (); }
@@ -2178,7 +2158,7 @@ public class Header extends Table {
     if (getULONG (0) == Tag.ttcf) {
       return fromTTCBinary2 (in, 0, curOffset, top); }
 
-    int numTables = getUSHORT (4);
+    int numTables = getuint16 (4);
 
     data = new byte [curOffset + numTables*16];
     System.arraycopy (top, 0, data, 0, curOffset);
@@ -2304,7 +2284,7 @@ public class Header extends Table {
 <code-fragment id='header.methods'>
   <code-title>Helper class TableDesc</code-title>
   public Iterator tablesByTag () {
-    TableDesc[] tds = new TableDesc [getUSHORT (4)];
+    TableDesc[] tds = new TableDesc [getuint16 (4)];
     for (int i = 0; i &lt; tds.length; i++) {
       tds [i] = new TableDescByTag ();
       tds [i].tag    = getULONG   (12 + 16*i);
@@ -2317,7 +2297,7 @@ public class Header extends Table {
   }
 
   public Iterator tablesByOffset () {
-    TableDesc[] tds = new TableDesc [getUSHORT (4)];
+    TableDesc[] tds = new TableDesc [getuint16 (4)];
     for (int i = 0; i &lt; tds.length; i++) {
       tds [i] = new TableDescByOffset ();
       tds [i].tag    = getULONG   (12 + 16*i);
@@ -3483,13 +3463,13 @@ return Sum;
 
     int size = 4 + cmapsCount * 8;
     Block me = new Block (size, cmapsCount);
-    me.setUSHORT (0, version);
-    me.setUSHORT (2, cmapsCount);
+    me.setuint16 (0, version);
+    me.setuint16 (2, cmapsCount);
 
     int offset = 4;
     for (int i = 0; i &lt; cmapsCount; i++) {
-      me.setUSHORT (offset, platformids [i]);
-      me.setUSHORT (offset+2, encodingids [i]);
+      me.setuint16 (offset, platformids [i]);
+      me.setuint16 (offset+2, encodingids [i]);
       me.setBigOffset (offset + 4, cmapsSubtables [i]);
       offset += 8; }
 
@@ -3510,14 +3490,14 @@ return Sum;
     AttributesImpl at;
 
     at = new AttributesImpl ();
-    at.addAttribute ("", "version", "version", "CDATA", "" + getUSHORT (0));
+    at.addAttribute ("", "version", "version", "CDATA", "" + getuint16 (0));
     conf.ch.startElement ("cmap", at); {
 
       int[] counts = new int [data.length];
       for (int o = 0; o &lt; counts.length; o++) {
         counts [o] = 0; }
 
-      for (int st = 0; st &lt; getUSHORT (2); st++) {
+      for (int st = 0; st &lt; getuint16 (2); st++) {
         int stOffset = getLOffset (4 + 8*st + 4);
 	counts [stOffset]++; }
 
@@ -3528,19 +3508,19 @@ return Sum;
         for (int i = 0; i &lt; counts.length; i++) {
           counts [i] = 2; }}
 
-      for (int st = 0; st &lt; getUSHORT (2); st++) {
+      for (int st = 0; st &lt; getuint16 (2); st++) {
         at = new AttributesImpl ();
         int stOffset = getLOffset (4 + 8*st + 4);
 
-	int platformID = getUSHORT (4 + 8*st);
-        int encodingID = getUSHORT (4 + 8*st + 2);
+	int platformID = getuint16 (4 + 8*st);
+        int encodingID = getuint16 (4 + 8*st + 2);
 
         at.addAttribute ("", "platformid", "platformid", "CDATA",
                          "" + platformID);
         at.addAttribute ("", "encodingid", "encodingid", "CDATA",
                          "" + encodingID);
         at.addAttribute ("", "language", "language", "CDATA",
-                         "" + getUSHORT (stOffset + 4));
+                         "" + getuint16 (stOffset + 4));
 
         if (counts [stOffset] != 1) {
           at.addAttribute ("", "name", "name", "CDATA",
@@ -3551,10 +3531,10 @@ return Sum;
           oneSubtableToXML (conf, counts, stOffset, platformID, encodingID,
                             "mapping", at); }}
 
-      for (int st = 0; st &lt; getUSHORT (2); st++) {
+      for (int st = 0; st &lt; getuint16 (2); st++) {
         int stOffset = getLOffset (4 + 8*st + 4);
-	int platformID = getUSHORT (4 + 8*st);
-        int encodingID = getUSHORT (4 + 8*st + 2);
+	int platformID = getuint16 (4 + 8*st);
+        int encodingID = getuint16 (4 + 8*st + 2);
         if (counts [stOffset] != 1) {
 	  at = new AttributesImpl ();
 	  at.addAttribute ("", "id", "id", "CDATA",
@@ -3571,7 +3551,7 @@ return Sum;
                          String element, AttributesImpl at)
       throws org.xml.sax.SAXException, UnsupportedFontException, InvalidFontException {
 
-    int format = getUSHORT (stOffset);
+    int format = getuint16 (stOffset);
     at.addAttribute ("", "format", "format", "CDATA", "" + format);
 
     switch (format) {
@@ -3730,13 +3710,13 @@ static public Index WinUnicode10 = new Index (3, 10);
   public int char2glyph (int platformID, int encodingID, int charCode)
      throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   platformID == getUSHORT (4 + 8*st)
-          &amp;&amp; encodingID == getUSHORT (4 + 8*st + 2)) {
+      if (   platformID == getuint16 (4 + 8*st)
+          &amp;&amp; encodingID == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (4 + 8*st + 4);
-        int format = getUSHORT (stOffset);
+        int format = getuint16 (stOffset);
         switch (format) {
           case 0: { <code-include linkend='cmap_format0'/> }
           case 2: { <code-include linkend='cmap_format2'/> }
@@ -3752,11 +3732,11 @@ static public Index WinUnicode10 = new Index (3, 10);
 
   public int unicodechar2glyph (int charCode) throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
     int encodingID = 1;
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (getUSHORT (4 + 8*st) == 3 &amp;&amp; getUSHORT (4 + 8*st + 2) == 10) {
+      if (getuint16 (4 + 8*st) == 3 &amp;&amp; getuint16 (4 + 8*st + 2) == 10) {
         encodingID = 10; }}
 
     return char2glyph (3, encodingID, charCode);
@@ -3774,13 +3754,13 @@ static public Index WinUnicode10 = new Index (3, 10);
            getMap (int platformID, int encodingID, int from, int to)
       throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   platformID == getUSHORT (4 + 8*st)
-          &amp;&amp; encodingID == getUSHORT (4 + 8*st + 2)) {
+      if (   platformID == getuint16 (4 + 8*st)
+          &amp;&amp; encodingID == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (4 + 8*st + 4);
-        int format = getUSHORT (stOffset);
+        int format = getuint16 (stOffset);
         switch (format) {
           case 0: { <code-include linkend='cmap_format0_iterator'/>}
           case 2: { <code-include linkend='cmap_format2_iterator'/>}
@@ -3831,14 +3811,14 @@ static public Index WinUnicode10 = new Index (3, 10);
   public int glyph2char (int platformID, int encodingID, int glyphID)
       throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   platformID == getUSHORT (4 + 8*st)
-          &amp;&amp; encodingID == getUSHORT (4 + 8*st + 2)) {
+      if (   platformID == getuint16 (4 + 8*st)
+          &amp;&amp; encodingID == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (4 + 8*st + 4);
 
-        int format = getUSHORT (stOffset);
+        int format = getuint16 (stOffset);
         switch (format) {
           case  0: { <code-include linkend='cmap_format0_inv'/>}
           case  2: { <code-include linkend='cmap_format2_inv'/>}
@@ -3852,11 +3832,11 @@ static public Index WinUnicode10 = new Index (3, 10);
 
   public int glyph2unicodechar (int glyphID) throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
     int encodingID = 1;
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (getUSHORT (4 + 8*st) == 3 &amp;&amp; getUSHORT (4 + 8*st + 2) == 10) {
+      if (getuint16 (4 + 8*st) == 3 &amp;&amp; getuint16 (4 + 8*st + 2) == 10) {
         encodingID = 10; }}
 
     return glyph2char (3, encodingID, glyphID);
@@ -3885,14 +3865,14 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     java.util.Vector&lt;Integer> v = new java.util.Vector&lt;Integer> ();
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   platformID == getUSHORT (4 + 8*st)
-          &amp;&amp; encodingID == getUSHORT (4 + 8*st + 2)) {
+      if (   platformID == getuint16 (4 + 8*st)
+          &amp;&amp; encodingID == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (4 + 8*st + 4);
 
-        int format = getUSHORT (stOffset);
+        int format = getuint16 (stOffset);
 
         switch (format) {
           case  0: { <code-include linkend='cmap_format0_inv2'/>; break;}
@@ -3911,11 +3891,11 @@ static public Index WinUnicode10 = new Index (3, 10);
 
   public int[] glyph2unicodechars (int glyphID) {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
     int encodingID = 1;
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (getUSHORT (4 + 8*st) == 3 &amp;&amp; getUSHORT (4 + 8*st + 2) == 10) {
+      if (getuint16 (4 + 8*st) == 3 &amp;&amp; getuint16 (4 + 8*st + 2) == 10) {
         encodingID = 10; }}
 
     return glyph2chars (3, encodingID, glyphID);
@@ -3928,11 +3908,11 @@ static public Index WinUnicode10 = new Index (3, 10);
 <code-fragment id='cmap.methods'>
   <code-title>Cmap subtable probe</code-title>
   public boolean hasCmapSubtable (int platformID, int encodingID, int languageID) {
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   platformID == getUSHORT (4 + 8*st)
-          &amp;&amp; encodingID == getUSHORT (4 + 8*st + 2)) {
+      if (   platformID == getuint16 (4 + 8*st)
+          &amp;&amp; encodingID == getuint16 (4 + 8*st + 2)) {
         return true; }}
     return false;
   }
@@ -4125,12 +4105,12 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! claim ("cmap header", 0, 4)) {
     return; }
 
-  int version = getUSHORT (0);
+  int version = getuint16 (0);
   if (version > 0) {
     reportError ("cmap table version (" + version
                    + ") not part of the specification"); }
 
-  int numTables = getUSHORT (2);
+  int numTables = getuint16 (2);
   if (numTables == 0) {
     reportMistake ("font does not have any cmap subtables"); }
 </code-fragment>
@@ -4153,8 +4133,8 @@ static public Index WinUnicode10 = new Index (3, 10);
   int lastEncodingID = -1;
 
   for (int st = 0; st &lt; numTables; st++) {
-    int platformID = getUSHORT (4 + 8*st);
-    int encodingID = getUSHORT (4 + 8*st + 2);
+    int platformID = getuint16 (4 + 8*st);
+    int encodingID = getuint16 (4 + 8*st + 2);
 
     if (   platformID &lt; lastPlatformID
         || (   platformID == lastPlatformID
@@ -4176,8 +4156,8 @@ static public Index WinUnicode10 = new Index (3, 10);
   int subtable31offset = -1;
 
   for (int st = 0; st &lt; numTables; st++) {
-    int platformID = getUSHORT (4 + 8*st);
-    int encodingID = getUSHORT (4 + 8*st + 2);
+    int platformID = getuint16 (4 + 8*st);
+    int encodingID = getuint16 (4 + 8*st + 2);
 
     if (platformID == 0 &amp;&amp; encodingID == 3) {
       subtable03offset = getLOffset (4 + 8*st + 4); }
@@ -4213,7 +4193,7 @@ static public Index WinUnicode10 = new Index (3, 10);
     if (checked) {
       continue; }
 
-    int format = getUSHORT (stOffset);
+    int format = getuint16 (stOffset);
     switch (format) {
       case 0: { <code-include linkend='validate_cmap_format0'/>; break; }
       case 2: { <code-include linkend='validate_cmap_format2'/>; break; }
@@ -4230,12 +4210,12 @@ static public Index WinUnicode10 = new Index (3, 10);
 <code-fragment id='validate_unicode_subtable_format'>
   <code-title>Check the format of the Microsoft Unicode subtable</code-title>
   for (int st = 0; st &lt; numTables; st++) {
-    int platformID = getUSHORT (4 + 8*st);
-    int encodingID = getUSHORT (4 + 8*st + 2);
+    int platformID = getuint16 (4 + 8*st);
+    int encodingID = getuint16 (4 + 8*st + 2);
 
     if (platformID == 3 &amp;&amp; encodingID == 1) {
       int stOffset = getLOffset (4 + 8*st + 4);
-      int format = getUSHORT (stOffset);
+      int format = getuint16 (stOffset);
       if (format != 4) {
         reportError ("cmap subtable 3/1 must be in format 4"); }
       break; }}
@@ -4442,9 +4422,9 @@ static public Index WinUnicode10 = new Index (3, 10);
         m [charcode] = glyphid; }
 
     Block b = new Block (262, 0);
-    b.setUSHORT (0, 0);
-    b.setUSHORT (2, 262);
-    b.setUSHORT (4, language);
+    b.setuint16 (0, 0);
+    b.setuint16 (2, 262);
+    b.setuint16 (4, language);
     int offset = 6;
     for (int i = 0; i &lt;= 255; i++) {
       b.setuint8 (offset, m[i]);
@@ -4479,7 +4459,7 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format0'>
   <code-title>Return glyph for 'charCode', using format 0 subtable at 'stOffset'</code-title>
-  { int size = getUSHORT (stOffset + 2) - 6;
+  { int size = getuint16 (stOffset + 2) - 6;
     if (0 &lt;= charCode &amp;&amp; charCode &lt; size) {
       return getuint8 (stOffset + 6 + charCode); }
     else {
@@ -4491,7 +4471,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   { java.util.TreeMap&lt;Integer, Integer> m
         = new java.util.TreeMap&lt;Integer, Integer> ();
 
-    int size = getUSHORT (stOffset + 2) - 6;
+    int size = getuint16 (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
       if (from &lt;= i &amp;&amp; (i &lt;= to || to == -1)) {
         m.put (i, getuint8 (stOffset + 6 + i)); }}
@@ -4501,7 +4481,7 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format0_inv'>
   <code-title>Return character for 'glyphID', using format 0 subtable at 'stOffset'</code-title>
-  { int size = getUSHORT (stOffset + 2) - 6;
+  { int size = getuint16 (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
       if (getuint8 (stOffset + 6 + i) == glyphID) {
         return i; }}
@@ -4510,7 +4490,7 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format0_inv2'>
   <code-title>Fill 'v' with characters for 'glyphID', using format 0 subtable at 'stOffset'</code-title>
-  { int size = getUSHORT (stOffset + 2) - 6;
+  { int size = getuint16 (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
       if (getuint8 (stOffset + 6 + i) == glyphID) {
         v.add (new Integer (i)); }}}
@@ -4559,12 +4539,12 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! claim (stPrefix + " header", stOffset, 6)) {
     break; }
 
-  int stVersion = getUSHORT (stOffset + 4);
+  int stVersion = getuint16 (stOffset + 4);
   if (stVersion > 0) {
     reportError ("cmap@" + stOffset + " table version (" + stVersion
                  + ") not part of the specification"); }
 
-  int size = getUSHORT (stOffset + 2);
+  int size = getuint16 (stOffset + 2);
   if (size &lt; 6) {
     reportError ("cmap subtable at " + stOffset + " has length &lt;  6"); }
   if (size &gt; 6 + 256) {
@@ -4919,25 +4899,25 @@ static public Index WinUnicode10 = new Index (3, 10);
         blockSize += 2 * gia.length; }
 
       Block me = new Block (blockSize, 0);
-      me.setUSHORT (0, 2);
-      me.setUSHORT (2, blockSize);
-      me.setUSHORT (4, 0);
+      me.setuint16 (0, 2);
+      me.setuint16 (2, blockSize);
+      me.setuint16 (4, 0);
       int o = 6;
       for (int r = 0; r &lt;= 0xff; r++) {
-        me.setUSHORT (o, subHeaderKeys [r] * 8);
+        me.setuint16 (o, subHeaderKeys [r] * 8);
 	o += 2; }
       for (SubHeader sh : subHeaders) {
-        me.setUSHORT (o, sh.first);
+        me.setuint16 (o, sh.first);
         o += 2;
-        me.setUSHORT (o, sh.count);
+        me.setuint16 (o, sh.count);
         o += 2;
-        me.setSHORT (o, sh.delta);
+        me.setint16 (o, sh.delta);
         o += 2;
-        me.setUSHORT (o, giaOffsets [sh.glyphIndexArray] - o);
+        me.setuint16 (o, giaOffsets [sh.glyphIndexArray] - o);
         o += 2; }
       for (int[] gia : glyphIndexArrays) {
         for (int i = 0; i &lt; gia.length; i++) {
-          me.setUSHORT (o, gia [i]);
+          me.setuint16 (o, gia [i]);
           o += 2; }}
 
       return me; }
@@ -4966,25 +4946,25 @@ static public Index WinUnicode10 = new Index (3, 10);
     int giaStart = 6 + 512 + 8*subHeadersCount;
     int blockSize = giaStart + 2*glyphIndexArray.length;
     Block me = new Block (blockSize, 0);
-    me.setUSHORT (0, 2);
-    me.setUSHORT (2, blockSize);
-    me.setUSHORT (4, language);
+    me.setuint16 (0, 2);
+    me.setuint16 (2, blockSize);
+    me.setuint16 (4, language);
     int o = 6;
     for (int i = 0; i &lt; 256; i++) {
-      me.setUSHORT (o, subHeaderKeys [i] * 8);
+      me.setuint16 (o, subHeaderKeys [i] * 8);
       o += 2; }
     for (int c = 0; c &lt; subHeadersCount; c++) {
       SubHeader sh = subHeaders [c];
-      me.setUSHORT (o, sh.first);
+      me.setuint16 (o, sh.first);
       o += 2;
-      me.setUSHORT (o, sh.count);
+      me.setuint16 (o, sh.count);
       o += 2;
-      me.setSHORT (o, sh.delta);
+      me.setint16 (o, sh.delta);
       o += 2;
-      me.setUSHORT (o, giaStart + 2*sh.glyphIndexArray - o);
+      me.setuint16 (o, giaStart + 2*sh.glyphIndexArray - o);
       o += 2; }
     for (int i = 0; i &lt; glyphIndexArray.length; i++) {
-      me.setUSHORT (o, glyphIndexArray [i]);
+      me.setuint16 (o, glyphIndexArray [i]);
       o += 2; }
 
     return me;
@@ -5006,7 +4986,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! conf.preciseCmap) {
     StringBuilder sb = new StringBuilder ();
     for (int key = 0; key &lt; 256; key++) {
-      int subHeadersIndex = getUSHORT (stOffset + 6 + 2*key) / 8;
+      int subHeadersIndex = getuint16 (stOffset + 6 + 2*key) / 8;
       if (subHeadersIndex == 0) {
         sb.append (" 0x");
         sb.append (Integer.toHexString (key)); }}
@@ -5040,7 +5020,7 @@ static public Index WinUnicode10 = new Index (3, 10);
     = new TreeMap&lt;Integer, SortedSet&lt;Integer>> ();
 
   for (int key = 0; key &lt; 256; key++) {
-    int subHeader = getUSHORT (stOffset + 6 + 2*key) / 8;
+    int subHeader = getuint16 (stOffset + 6 + 2*key) / 8;
     SortedSet&lt;Integer> keys = subHeader2keys.get (subHeader);
     if (keys == null) {
       keys = new TreeSet&lt;Integer> ();
@@ -5056,13 +5036,13 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap.decompile.format2.elt.2'>
   <code-title>Find the boundaries of glyphIndexArray</code-title>
-   int minGlyphIndexOffset = stOffset + getUSHORT (stOffset + 2);
+   int minGlyphIndexOffset = stOffset + getuint16 (stOffset + 2);
    int maxGlyphIndexOffset = stOffset;
 
     for (int subHeader : subHeader2keys.keySet ()) {
       int subHeaderOffset = stOffset + 6 + 512 + 8*subHeader;
-      int entryCount = getUSHORT (subHeaderOffset + 2);
-      int idRangeOffset = getUSHORT (subHeaderOffset + 6);
+      int entryCount = getuint16 (subHeaderOffset + 2);
+      int idRangeOffset = getuint16 (subHeaderOffset + 6);
       if (entryCount > 0) {
         int firstGlyphIndexOffset = subHeaderOffset + 6 + idRangeOffset;
         int lastGlyphIndexOffset = firstGlyphIndexOffset + 2 * entryCount;
@@ -5090,10 +5070,10 @@ static public Index WinUnicode10 = new Index (3, 10);
       at.addAttribute ("", "highBytes", "highBytes", "CDATA", sb.toString ()); }
 
     int subHeaderOffset = stOffset + 6 + 512 + 8*subHeader;
-    int firstCode = getUSHORT (subHeaderOffset);
-    int entryCount = getUSHORT (subHeaderOffset + 2);
-    int idDelta = getUSHORT (subHeaderOffset + 4);
-    int idRangeOffset = getUSHORT (subHeaderOffset + 6);
+    int firstCode = getuint16 (subHeaderOffset);
+    int entryCount = getuint16 (subHeaderOffset + 2);
+    int idDelta = getuint16 (subHeaderOffset + 4);
+    int idRangeOffset = getuint16 (subHeaderOffset + 6);
     int firstGlyphIndexOffset = subHeaderOffset + 6 + idRangeOffset;
 
     at.addAttribute ("", "firstCode", "firstCode", "CDATA",
@@ -5114,7 +5094,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   { StringBuilder sb = new StringBuilder ();
     for (int i = minGlyphIndexOffset; i &lt; maxGlyphIndexOffset; i += 2) {
       sb.append (" ");
-      sb.append (getUSHORT (i)); }
+      sb.append (getuint16 (i)); }
     at = new AttributesImpl ();
     at.addAttribute ("", "v", "v", "CDATA", sb.toString ());
 
@@ -5184,7 +5164,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   { int highByte = (charCode >> 8) &amp; 0xff;
     int lowByte = (charCode) &amp; 0xff;
 
-    if (highByte == 0 &amp;&amp; getUSHORT (stOffset + 6 + 2*lowByte) == 0) {
+    if (highByte == 0 &amp;&amp; getuint16 (stOffset + 6 + 2*lowByte) == 0) {
       // lowByte is a single byte character
       headerIndexByte = lowByte; }
     else {
@@ -5192,19 +5172,19 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     glyphIndexArrayIndexByte = lowByte; }
 
-  int subHeaderKey = getUSHORT (stOffset + 6 + 2*headerIndexByte) / 8;
+  int subHeaderKey = getuint16 (stOffset + 6 + 2*headerIndexByte) / 8;
   int subHeaderOffset = stOffset + 518 + 8*subHeaderKey;
-  int firstCode = getUSHORT (subHeaderOffset);
-  int entryCount = getUSHORT (subHeaderOffset + 2);
+  int firstCode = getuint16 (subHeaderOffset);
+  int entryCount = getuint16 (subHeaderOffset + 2);
 
   if (   glyphIndexArrayIndexByte &lt; firstCode
       || firstCode + entryCount &lt;= glyphIndexArrayIndexByte) {
     return 0; }
 
-  int idDelta = getUSHORT (subHeaderOffset + 4);
-  int idRange = getUSHORT (subHeaderOffset + 6);
+  int idDelta = getuint16 (subHeaderOffset + 4);
+  int idRange = getuint16 (subHeaderOffset + 6);
   int glyphIndexOffset = subHeaderOffset + 6 + idRange;
-  int g = getUSHORT (glyphIndexOffset + 2 * (glyphIndexArrayIndexByte - firstCode));
+  int g = getuint16 (glyphIndexOffset + 2 * (glyphIndexArrayIndexByte - firstCode));
 
   if (g == 0) {
     return 0; }
@@ -5223,16 +5203,16 @@ static public Index WinUnicode10 = new Index (3, 10);
       = new java.util.TreeMap&lt;Integer, Integer> ();
 
   for (int firstByte = 0; firstByte &lt;= 0xff; firstByte++) {
-    int subHeaderIndex = getUSHORT (stOffset + 6 + 2*firstByte) / 8;
+    int subHeaderIndex = getuint16 (stOffset + 6 + 2*firstByte) / 8;
     int subHeaderOffset = stOffset + 518 + subHeaderIndex * 8;
-    int firstCode = getUSHORT (subHeaderOffset);
-    int entryCount = getUSHORT (subHeaderOffset + 2);
-    int idDelta = getUSHORT (subHeaderOffset + 4);
-    int idRange = getUSHORT (subHeaderOffset + 6);
+    int firstCode = getuint16 (subHeaderOffset);
+    int entryCount = getuint16 (subHeaderOffset + 2);
+    int idDelta = getuint16 (subHeaderOffset + 4);
+    int idRange = getuint16 (subHeaderOffset + 6);
     int glyphIndexOffset = subHeaderOffset + 6 + idRange;
 
     if (subHeaderIndex == 0) {
-      int g = getUSHORT (glyphIndexOffset + 2 * (firstByte - firstCode));
+      int g = getuint16 (glyphIndexOffset + 2 * (firstByte - firstCode));
 	if (g != 0) {
         m.put (firstByte, (g + idDelta) % 0x10000); }}
 
@@ -5240,7 +5220,7 @@ static public Index WinUnicode10 = new Index (3, 10);
       for (int secondByte = firstCode;
            secondByte &lt; firstCode + entryCount;
            secondByte++) {
-	int g = getUSHORT (glyphIndexOffset + 2 * (secondByte - firstCode));
+	int g = getuint16 (glyphIndexOffset + 2 * (secondByte - firstCode));
         if (g != 0) {
           m.put ((firstByte &lt;&lt; 8) + secondByte,
                  (g + idDelta) % 0x10000); }}}}
@@ -5312,12 +5292,12 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! claim (stPrefix + " header", stOffset + 2, 4)) {
     break; }
 
-  int stVersion = getUSHORT (stOffset + 4);
+  int stVersion = getuint16 (stOffset + 4);
   if (stVersion > 0) {
     reportError ("cmap@" + stOffset + " table version (" + stVersion
                  + ") not part of the specification"); }
 
-  int length = getUSHORT (stOffset + 2);
+  int length = getuint16 (stOffset + 2);
 </code-fragment>
 
       </section>
@@ -5716,19 +5696,19 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     int length = 24;
     Block me = new Block (length, 0);
-    me.setUSHORT (0, 4);
-    me.setUSHORT (2, length);
-    me.setUSHORT (4, language);
-    me.setUSHORT (6, segCountX2);
-    me.setUSHORT (8, searchRange);
-    me.setUSHORT (10, entrySelector);
-    me.setUSHORT (12, rangeShift);
+    me.setuint16 (0, 4);
+    me.setuint16 (2, length);
+    me.setuint16 (4, language);
+    me.setuint16 (6, segCountX2);
+    me.setuint16 (8, searchRange);
+    me.setuint16 (10, entrySelector);
+    me.setuint16 (12, rangeShift);
 
-    me.setUSHORT (14, 0xffff);
-    me.setUSHORT (16, 0); // reservedPad
-    me.setUSHORT (18, 0xffff);
-    me.setSHORT  (20, 1);
-    me.setUSHORT (22, 0);
+    me.setuint16 (14, 0xffff);
+    me.setuint16 (16, 0); // reservedPad
+    me.setuint16 (18, 0xffff);
+    me.setint16  (20, 1);
+    me.setuint16 (22, 0);
 
     return me; }
 </code-fragment>
@@ -5808,38 +5788,38 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     int length = 16 + 8*segCount + glyphIdArraySize*2;
     Block me = new Block (length, 0);
-    me.setUSHORT (0, 4);
-    me.setUSHORT (2, length);
-    me.setUSHORT (4, language);
-    me.setUSHORT (6, segCountX2);
-    me.setUSHORT (8, searchRange);
-    me.setUSHORT (10, entrySelector);
-    me.setUSHORT (12, rangeShift);
+    me.setuint16 (0, 4);
+    me.setuint16 (2, length);
+    me.setuint16 (4, language);
+    me.setuint16 (6, segCountX2);
+    me.setuint16 (8, searchRange);
+    me.setuint16 (10, entrySelector);
+    me.setuint16 (12, rangeShift);
 
     int offset = 14;
     int glyphIdArrayOffset = 16 + 8 * segCount;;
 
     for (int i = 0; i &lt; segCount; i++) {
-      me.setUSHORT (offset, segments [i].end);
-      me.setUSHORT (offset + 2 + 2*segCount, segments [i].start);
+      me.setuint16 (offset, segments [i].end);
+      me.setuint16 (offset + 2 + 2*segCount, segments [i].start);
 
       if (segments [i].consecutive) {
         int firstCode = segments [i].start;
-        me.setSHORT  (offset + 2 + 4*segCount,
+        me.setint16  (offset + 2 + 4*segCount,
                       (m[firstCode] - firstCode) % 0x10000);
-        me.setUSHORT (offset + 2 + 6*segCount, 0); }
+        me.setuint16 (offset + 2 + 6*segCount, 0); }
 
       else {
-        me.setSHORT  (offset + 2 + 4*segCount, 0);
-        me.setUSHORT (offset + 2 + 6*segCount,
+        me.setint16  (offset + 2 + 4*segCount, 0);
+        me.setuint16 (offset + 2 + 6*segCount,
                       glyphIdArrayOffset - 16 - 6*segCount - 2*i);
         for (int j = segments [i].start; j &lt;= segments [i].end; j++) {
-          me.setUSHORT (glyphIdArrayOffset, m [j]);
+          me.setuint16 (glyphIdArrayOffset, m [j]);
           glyphIdArrayOffset += 2; }}
 
       offset += 2; }
 
-    me.setUSHORT (offset, 0); // reservedPad
+    me.setuint16 (offset, 0); // reservedPad
 
     return me; }
 </code-fragment>
@@ -5866,13 +5846,13 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     int length = 16 + 8*segCount + glyphIndexVals.length *2;
     Block me = new Block (length, 0);
-    me.setUSHORT (0, 4);
-    me.setUSHORT (2, length);
-    me.setUSHORT (4, language);
-    me.setUSHORT (6, segCountX2);
-    me.setUSHORT (8, searchRange);
-    me.setUSHORT (10, entrySelector);
-    me.setUSHORT (12, rangeShift);
+    me.setuint16 (0, 4);
+    me.setuint16 (2, length);
+    me.setuint16 (4, language);
+    me.setuint16 (6, segCountX2);
+    me.setuint16 (8, searchRange);
+    me.setuint16 (10, entrySelector);
+    me.setuint16 (12, rangeShift);
 
     int offset = 14;
     int glyphIdArrayOffset = 0;
@@ -5885,20 +5865,20 @@ static public Index WinUnicode10 = new Index (3, 10);
       int idDelta = Integer.decode (segment.getAttribute ("idDelta")).intValue ();
       int idRangeOffset = Integer.decode (segment.getAttribute ("idRangeOffset")).intValue ();
 
-      me.setUSHORT (offset, endCode);
-      me.setUSHORT (offset + 2 + 2*segCount, startCode);
-      me.setSHORT (offset + 2 + 4*segCount, idDelta);
-      me.setSHORT (offset + 2 + 6*segCount, idRangeOffset);
+      me.setuint16 (offset, endCode);
+      me.setuint16 (offset + 2 + 2*segCount, startCode);
+      me.setint16 (offset + 2 + 4*segCount, idDelta);
+      me.setint16 (offset + 2 + 6*segCount, idRangeOffset);
 
       offset += 2; }
 
-    me.setUSHORT (offset, 0); // reservedPad
+    me.setuint16 (offset, 0); // reservedPad
     offset += 2;
 
     offset += 6*segCount; // skip startCount, idDelta and idRangeOffset;
 
     for (int i = 0; i &lt; glyphIndexVals.length; i++) {
-      me.setUSHORT (offset, glyphIndexVals [i]);
+      me.setuint16 (offset, glyphIndexVals [i]);
       offset += 2; }
 
     return me;
@@ -5913,13 +5893,13 @@ static public Index WinUnicode10 = new Index (3, 10);
 <code-fragment id='cmap.decompile.format4.elt'>
   <code-title>Generate elements for the format 4 cmap subtable at 'stOffset'</code-title>
   if (conf.preciseCmap) {
-    int segCount = getUSHORT (stOffset + 6) / 2;
+    int segCount = getuint16 (stOffset + 6) / 2;
 
     for (int s = 0; s &lt; segCount; s++) {
-      int endCode = getUSHORT (stOffset + 14 + 2*s);
-      int startCode = getUSHORT (stOffset + 16 + 2*segCount + 2*s);
-      int idDelta = getUSHORT (stOffset + 16 + 4*segCount + 2*s);
-      int idRangeOffset = getUSHORT (stOffset + 16 + 6*segCount + 2*s);
+      int endCode = getuint16 (stOffset + 14 + 2*s);
+      int startCode = getuint16 (stOffset + 16 + 2*segCount + 2*s);
+      int idDelta = getuint16 (stOffset + 16 + 4*segCount + 2*s);
+      int idRangeOffset = getuint16 (stOffset + 16 + 6*segCount + 2*s);
 
       at = new AttributesImpl ();
       at.addAttribute ("", "startCode", "startCode", "CDATA",
@@ -5935,10 +5915,10 @@ static public Index WinUnicode10 = new Index (3, 10);
 
     StringBuilder sb = new StringBuilder ();
     int glyphIndexOffset = stOffset + 16 + 8*segCount;
-    int glyphIndexCount = (getUSHORT (stOffset + 2) - (16 + 8*segCount)) / 2;
+    int glyphIndexCount = (getuint16 (stOffset + 2) - (16 + 8*segCount)) / 2;
     for (int i = 0; i &lt; glyphIndexCount; i++) {
       sb.append (" ");
-      sb.append (getUSHORT (glyphIndexOffset + 2*i)); }
+      sb.append (getuint16 (glyphIndexOffset + 2*i)); }
 
     at = new AttributesImpl ();
     at.addAttribute ("", "v", "v", "CDATA", sb.toString ());
@@ -5969,14 +5949,14 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format4'>
   <code-title>Return glyph for 'charCode', using format 4 subtable at 'stOffset'</code-title>
-  { int segCount = getUSHORT (stOffset + 6) / 2;
+  { int segCount = getuint16 (stOffset + 6) / 2;
     int min = 0;
     int max = segCount - 1;
 
     while (min &lt;= max) {
       int s = (min + max) / 2;
-      int startCount = getUSHORT (stOffset + 16 + 2*segCount + 2*s);
-      int endCount = getUSHORT (stOffset + 14 + 2*s);
+      int startCount = getuint16 (stOffset + 16 + 2*segCount + 2*s);
+      int endCount = getuint16 (stOffset + 14 + 2*s);
 
       if (charCode &lt; startCount) {
         max = s - 1; }
@@ -5996,8 +5976,8 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='compute_glyphid'>
   <code-title>Return glyph for 'charCode' covered by range 's'</code-title>
-  int idRangeOffset = getUSHORT (stOffset + 16 + 6*segCount + 2*s);
-  int idDelta = getSHORT (stOffset + 16 + 4*segCount + 2*s);
+  int idRangeOffset = getuint16 (stOffset + 16 + 6*segCount + 2*s);
+  int idDelta = getint16 (stOffset + 16 + 4*segCount + 2*s);
 
   if (idRangeOffset == 0) {
     return (charCode + idDelta) &amp; 0xffff; }
@@ -6005,7 +5985,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   int offset = stOffset + 16 + 6*segCount + 2*s
                 + idRangeOffset
                 + 2*(charCode - startCount);
-  int glyphIdArrayValue = getUSHORT (offset);
+  int glyphIdArrayValue = getuint16 (offset);
 
   if (glyphIdArrayValue == 0) {
     return 0; }
@@ -6018,14 +5998,14 @@ static public Index WinUnicode10 = new Index (3, 10);
   { java.util.TreeMap&lt;Integer, Integer> m
         = new java.util.TreeMap&lt;Integer, Integer> ();
 
-    int segCount = getUSHORT (stOffset + 6) / 2;
+    int segCount = getuint16 (stOffset + 6) / 2;
     for (int s = 0; s &lt; segCount; s++) {
 
-      int startCount = getUSHORT (stOffset + 16 + 2*segCount + 2*s);
-      int endCount = getUSHORT (stOffset + 14 + 2*s);
+      int startCount = getuint16 (stOffset + 16 + 2*segCount + 2*s);
+      int endCount = getuint16 (stOffset + 14 + 2*s);
       int idRangeOffsetOffset = stOffset + 16 + 6*segCount + 2*s;
-      int idRangeOffset = getUSHORT (idRangeOffsetOffset);
-      int idDelta = getSHORT (stOffset + 16 + 4*segCount + 2*s);
+      int idRangeOffset = getuint16 (idRangeOffsetOffset);
+      int idDelta = getint16 (stOffset + 16 + 4*segCount + 2*s);
 
       for (int c = startCount; c &lt;= endCount; c++) {
         if (idRangeOffset == 0) {
@@ -6038,7 +6018,7 @@ static public Index WinUnicode10 = new Index (3, 10);
                         + idRangeOffset
                         + 2*(c - startCount);
           /* offset = offset % 0x10000; */ /* why did we have that ? */
-          int glyphIdArrayValue = getUSHORT (offset);
+          int glyphIdArrayValue = getuint16 (offset);
 
           if (glyphIdArrayValue != 0) {
             int glyphID = (glyphIdArrayValue + idDelta) &amp; 0xffff;
@@ -6051,14 +6031,14 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format4_inv'>
   <code-title>Return character for 'glyphID', using format 4 subtable at stOffset</code-title>
-  { int segCount = getUSHORT (stOffset + 6) / 2;
+  { int segCount = getuint16 (stOffset + 6) / 2;
 
     for (int s = 0; s &lt; segCount; s++) {
-      int startCount = getUSHORT (stOffset + 16 + 2*segCount + 2*s);
-      int endCount = getUSHORT (stOffset + 14 + 2*s);
+      int startCount = getuint16 (stOffset + 16 + 2*segCount + 2*s);
+      int endCount = getuint16 (stOffset + 14 + 2*s);
       int idRangeOffsetOffset = stOffset + 16 + 6*segCount + 2*s;
-      int idRangeOffset = getUSHORT (idRangeOffsetOffset);
-      int idDelta = getSHORT (stOffset + 16 + 4*segCount + 2*s);
+      int idRangeOffset = getuint16 (idRangeOffsetOffset);
+      int idDelta = getint16 (stOffset + 16 + 4*segCount + 2*s);
 
       if (idRangeOffset == 0) {
         int charCode = (glyphID - idDelta) &amp; 0xffff;
@@ -6070,7 +6050,7 @@ static public Index WinUnicode10 = new Index (3, 10);
         int charCode = startCount;
 
         while (glyphOffset &lt;= lastGlyphOffset) {
-          if (glyphID == getUSHORT (glyphOffset)) {
+          if (glyphID == getuint16 (glyphOffset)) {
             return charCode; }
           charCode++;
           glyphOffset += 2; }}}
@@ -6080,14 +6060,14 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format4_inv2'>
   <code-title>Fill 'v' with characters for 'glyphID', using format 4 subtable at stOffset</code-title>
-  { int segCount = getUSHORT (stOffset + 6) / 2;
+  { int segCount = getuint16 (stOffset + 6) / 2;
 
     for (int s = 0; s &lt; segCount; s++) {
-      int startCount = getUSHORT (stOffset + 16 + 2*segCount + 2*s);
-      int endCount = getUSHORT (stOffset + 14 + 2*s);
+      int startCount = getuint16 (stOffset + 16 + 2*segCount + 2*s);
+      int endCount = getuint16 (stOffset + 14 + 2*s);
       int idRangeOffsetOffset = stOffset + 16 + 6*segCount + 2*s;
-      int idRangeOffset = getUSHORT (idRangeOffsetOffset);
-      int idDelta = getSHORT (stOffset + 16 + 4*segCount + 2*s);
+      int idRangeOffset = getuint16 (idRangeOffsetOffset);
+      int idDelta = getint16 (stOffset + 16 + 4*segCount + 2*s);
 
       if (idRangeOffset == 0) {
         int charCode = (glyphID - idDelta) &amp; 0xffff;
@@ -6099,7 +6079,7 @@ static public Index WinUnicode10 = new Index (3, 10);
         int charCode = startCount;
 
         while (glyphOffset &lt;= lastGlyphOffset) {
-          if (glyphID == getUSHORT (glyphOffset)) {
+          if (glyphID == getuint16 (glyphOffset)) {
             v.add (new Integer (charCode)); }
           charCode++;
           glyphOffset += 2; }}}}
@@ -6223,26 +6203,26 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! claim (stPrefix + " header", stOffset + 2, 12)) {
     break; }
 
-  int stVersion = getUSHORT (stOffset + 4);
+  int stVersion = getuint16 (stOffset + 4);
   if (stVersion > 0) {
     reportError ("cmap@" + stOffset + " table version (" + stVersion
                  + ") not part of the specification"); }
 
-  int length = getUSHORT (stOffset + 2);
+  int length = getuint16 (stOffset + 2);
 
-  int segCountX2 = getUSHORT (stOffset + 6);
+  int segCountX2 = getuint16 (stOffset + 6);
   if (segCountX2 % 2 != 0) {
     reportError ("cmap@" + stOffset + " segCountX2 is not even");
     break; }
   int segCount = segCountX2 / 2;
 
-  int searchRange = getUSHORT (stOffset + 8);
+  int searchRange = getuint16 (stOffset + 8);
   // verify searchRange = 2 x (2 ^ (log2 (segCount)))
 
-  int entrySelector = getUSHORT (stOffset + 10);
+  int entrySelector = getuint16 (stOffset + 10);
   // verify entrySelector = log2 (searchRange/2)
 
-  int rangeShift = getUSHORT (stOffset + 12);
+  int rangeShift = getuint16 (stOffset + 12);
   if (rangeShift != segCountX2 - searchRange) {
     reportError ("cmap@" + stOffset + " has wrong rangeShift value"); }
 
@@ -6254,8 +6234,8 @@ static public Index WinUnicode10 = new Index (3, 10);
   int glyphIdSizeNeeded = 0;
 
   for (int s = 0; s &lt; segCount; s++) {
-    int endCount = getUSHORT (stOffset + 14 + 2*s);
-    int startCount = getUSHORT (stOffset + 14 + 2*segCount + 2 + 2*s);
+    int endCount = getuint16 (stOffset + 14 + 2*s);
+    int startCount = getuint16 (stOffset + 14 + 2*segCount + 2 + 2*s);
 
     if (startCount > endCount) {
       reportError ("cmap@" + stOffset + ", range " + s
@@ -6268,7 +6248,7 @@ static public Index WinUnicode10 = new Index (3, 10);
     lastEndCount = endCount;
 
     int rangeOffset = stOffset + 14 + 6*segCount + 2 + 2*s;
-    int range = getUSHORT (rangeOffset);
+    int range = getuint16 (rangeOffset);
 
     if (range != 0) {
       claim (stPrefix + " range " + s,
@@ -6422,15 +6402,15 @@ static public Index WinUnicode10 = new Index (3, 10);
     int length = 10 + (lastCharCode - firstCharCode + 1)*2;
     Block b = new Block (length, 0);
 
-    b.setUSHORT (0, 6);
-    b.setUSHORT (2, length);
-    b.setUSHORT (4, language);
-    b.setUSHORT (6, firstCharCode);
-    b.setUSHORT (8, lastCharCode - firstCharCode + 1);
+    b.setuint16 (0, 6);
+    b.setuint16 (2, length);
+    b.setuint16 (4, language);
+    b.setuint16 (6, firstCharCode);
+    b.setuint16 (8, lastCharCode - firstCharCode + 1);
     int offset = 10;
     for (int i = firstCharCode; i &lt;= lastCharCode; i++) {
       int glyphid = m.get (i);
-       b.setUSHORT (offset, glyphid);
+       b.setuint16 (offset, glyphid);
        offset += 2; }
 
     return b;
@@ -6447,10 +6427,10 @@ static public Index WinUnicode10 = new Index (3, 10);
   <code-title>Generate elements for the format 6 cmap subtable at 'stOffset'</code-title>
   if (conf.preciseCmap) {
 
-    int firstCode = getUSHORT (stOffset + 6);
-    int lastCode = firstCode + getUSHORT (stOffset + 8) - 1;
+    int firstCode = getuint16 (stOffset + 6);
+    int lastCode = firstCode + getuint16 (stOffset + 8) - 1;
     for (int i = firstCode; i &lt;= lastCode; i++) {
-      int glyphID = getUSHORT (stOffset + 10 + 2*(i - firstCode));
+      int glyphID = getuint16 (stOffset + 10 + 2*(i - firstCode));
       at = new AttributesImpl ();
       at.addAttribute ("", "code", "code", "CDATA",
                        "0x" + Integer.toHexString (i));
@@ -6465,11 +6445,11 @@ static public Index WinUnicode10 = new Index (3, 10);
 
 <code-fragment id='cmap_format6'>
   <code-title>Return glyph for 'charCode', using format 6 subtable at 'stOffset'</code-title>
-  { int firstCode = getUSHORT (stOffset + 6);
-    int entryCount = getUSHORT (stOffset + 8);
+  { int firstCode = getuint16 (stOffset + 6);
+    int entryCount = getuint16 (stOffset + 8);
 
     if (firstCode &lt;= charCode &amp;&amp; charCode &lt; firstCode + entryCount) {
-      return getUSHORT (stOffset + 10 + (charCode-firstCode)*2); }
+      return getuint16 (stOffset + 10 + (charCode-firstCode)*2); }
     else {
       return 0; }}
 </code-fragment>
@@ -6479,24 +6459,24 @@ static public Index WinUnicode10 = new Index (3, 10);
   { java.util.TreeMap&lt;Integer, Integer> m
       = new java.util.TreeMap&lt;Integer, Integer> ();
 
-    int firstCode = getUSHORT (stOffset + 6);
-    int entryCount = getUSHORT (stOffset + 8);
+    int firstCode = getuint16 (stOffset + 6);
+    int entryCount = getuint16 (stOffset + 8);
 
     for (int i = 0; i &lt; entryCount; i++) {
       int code = firstCode + i;
       if (from &lt;= code &amp;&amp; (code &lt;= to || to == -1)) {
-        m.put (code, getUSHORT (stOffset + 10 + i*2)); }}
+        m.put (code, getuint16 (stOffset + 10 + i*2)); }}
 
     return m; }
 </code-fragment>
 
 <code-fragment id='cmap_format6_inv'>
   <code-title>Return character for 'glyphID', using format 6 subtable at stOffset</code-title>
-  { int firstCode = getUSHORT (stOffset + 6);
-    int entryCount = getUSHORT (stOffset + 8);
+  { int firstCode = getuint16 (stOffset + 6);
+    int entryCount = getuint16 (stOffset + 8);
 
     for (int i = 0; i &lt; entryCount; i++) {
-      if (getUSHORT (stOffset + 6 + 2*i) == glyphID) {
+      if (getuint16 (stOffset + 6 + 2*i) == glyphID) {
         return firstCode + i; }}
 
     return -1; }
@@ -6558,15 +6538,15 @@ static public Index WinUnicode10 = new Index (3, 10);
   if (! claim (stPrefix + " header", stOffset + 2, 8)) {
     break; }
 
-  int stVersion = getUSHORT (stOffset + 4);
+  int stVersion = getuint16 (stOffset + 4);
   if (stVersion > 0) {
     reportError ("cmap@" + stOffset + " table version (" + stVersion
                  + ") not part of the specification"); }
 
-  int length = getUSHORT (stOffset + 2);
+  int length = getuint16 (stOffset + 2);
 
-  int firstCode = getUSHORT (stOffset + 6);
-  int entryCount = getUSHORT (stOffset + 8);
+  int firstCode = getuint16 (stOffset + 6);
+  int entryCount = getuint16 (stOffset + 8);
 
   if (length != 2*entryCount + 10) {
     reportError ("cmap subtable at " + stOffset + " has wrong length"); }
@@ -6818,8 +6798,8 @@ If the intent is really for a Unicode encodings,
     if (children.getLength () == 0) {
       int blockSize = 12 + 8192 + 4;
       Block me = new Block (blockSize, 0);
-      me.setUSHORT (0, 8);
-      me.setUSHORT (2, 0);
+      me.setuint16 (0, 8);
+      me.setuint16 (2, 0);
       me.setULONG (4, blockSize);
       me.setULONG (8, language);
       // TODO deal with is32
@@ -6840,8 +6820,8 @@ If the intent is really for a Unicode encodings,
 
       int blockSize = 12 + 8192 + 4 + 12*ranges.length;
       Block me = new Block (blockSize, 0);
-      me.setUSHORT (0, 8);
-      me.setUSHORT (2, 0);
+      me.setuint16 (0, 8);
+      me.setuint16 (2, 0);
       me.setULONG (4, blockSize);
       me.setULONG (8, language);
       // TODO deal with is32
@@ -6886,8 +6866,8 @@ If the intent is really for a Unicode encodings,
 
       int blockSize = 12 + 8192 + 4 + 12*aRanges.length;
       Block me = new Block (blockSize, 0);
-      me.setUSHORT (0, 8);
-      me.setUSHORT (2, 0);
+      me.setuint16 (0, 8);
+      me.setuint16 (2, 0);
       me.setULONG (4, blockSize);
       me.setULONG (8, language);
       // TODO deal with is32
@@ -7183,8 +7163,8 @@ If the intent is really for a Unicode encodings,
     int length = 20 + 2*(lastCharCode - firstCharCode + 1);
     Block b = new Block (length, 0);
 
-    b.setUSHORT (0, 10);
-    b.setUSHORT (2, 0);
+    b.setuint16 (0, 10);
+    b.setuint16 (2, 0);
     b.setULONG (4, length);
     b.setULONG (8, language);
     b.setULONG (12, firstCharCode);
@@ -7192,7 +7172,7 @@ If the intent is really for a Unicode encodings,
     int offset = 20;
     for (int i = firstCharCode; i &lt;= lastCharCode; i++) {
       int glyphid = m.get (i);
-       b.setUSHORT (offset, glyphid);
+       b.setuint16 (offset, glyphid);
        offset += 2; }
 
     return b;
@@ -7213,7 +7193,7 @@ If the intent is really for a Unicode encodings,
     int lastCode = firstCode + getuint32asint (stOffset + 16,
                               "cmap subtable, format 10, entryCount too big") - 1;
     for (int i = firstCode; i &lt;= lastCode; i++) {
-      int glyphID = getUSHORT (stOffset + 20 + 2*(i - firstCode));
+      int glyphID = getuint16 (stOffset + 20 + 2*(i - firstCode));
       at = new AttributesImpl ();
       at.addAttribute ("", "code", "code", "CDATA",
                        "0x" + Integer.toHexString (i));
@@ -7234,7 +7214,7 @@ If the intent is really for a Unicode encodings,
                              "cmap subtable, format 10, entryCount too big");
 
     if (firstCode &lt;= charCode &amp;&amp; charCode &lt; firstCode + entryCount) {
-      return getUSHORT (stOffset + 20 + 2*(charCode-firstCode)); }
+      return getuint16 (stOffset + 20 + 2*(charCode-firstCode)); }
     else {
       return 0; }}
 </code-fragment>
@@ -7252,7 +7232,7 @@ If the intent is really for a Unicode encodings,
     for (int i = 0; i &lt; entryCount; i++) {
       int code = firstCode + i;
       if (from &lt;= code &amp;&amp; (code &lt;= to || to == -1)) {
-        m.put (code, getUSHORT (stOffset + 20 + 2*i)); }}
+        m.put (code, getuint16 (stOffset + 20 + 2*i)); }}
 
     return m; }
 </code-fragment>
@@ -7266,7 +7246,7 @@ If the intent is really for a Unicode encodings,
                             "cmap subtable, format 10, entryCount too big");
 
     for (int i = 0; i &lt; entryCount; i++) {
-      if (getUSHORT (stOffset + 20 + 2*i) == glyphID) {
+      if (getuint16 (stOffset + 20 + 2*i) == glyphID) {
         return firstCode + i; }}
 
     return -1; }
@@ -7504,8 +7484,8 @@ If the intent is really for a Unicode encodings,
     int length = 16 + 12*groups;
     Block b = new Block (length, 0);
 
-    b.setUSHORT (0, 12);
-    b.setUSHORT (2, 0);
+    b.setuint16 (0, 12);
+    b.setuint16 (2, 0);
     b.setULONG (4, length);
     b.setULONG (8, language);
     b.setULONG (12, groups);
@@ -7955,7 +7935,7 @@ If the intent is really for a Unicode encodings,
 
 
     Block me = new Block (length, nbSelectors * 2);
-    me.setUSHORT (0, 14);
+    me.setuint16 (0, 14);
     me.setULONG (6, nbSelectors);
     int totalLength = length;
 
@@ -8002,7 +7982,7 @@ If the intent is really for a Unicode encodings,
           nonDefaultUvsBlock.setuint24 (o,
             Integer.decode (map.getAttribute ("usv")).intValue ());
           o += 3;
-          nonDefaultUvsBlock.setUSHORT (o,
+          nonDefaultUvsBlock.setuint16 (o,
             Integer.decode (map.getAttribute ("gid")).intValue ());
           o += 2; }
         me.setBigOffset (10 + 11*i + 7, nonDefaultUvsBlock); }
@@ -8111,7 +8091,7 @@ If the intent is really for a Unicode encodings,
       long nbMappings = getULONG (offset);
       for (int i = 0; i &lt; nbMappings; i++) {
         int usv = getuint24 (offset + 4 + i * 5);
-        int gid = getUSHORT (offset + 4 + i * 5 + 3);
+        int gid = getuint16 (offset + 4 + i * 5 + 3);
 
         at = new AttributesImpl ();
         at.addAttribute ("", "usv", "usv", "CDATA",
@@ -8155,11 +8135,11 @@ If the intent is really for a Unicode encodings,
   public int uvs2glyph (int charCode, int variationSelector)
     throws UnsupportedFontException {
 
-    int numTables = getUSHORT (2);
+    int numTables = getuint16 (2);
 
     for (int st = 0; st &lt; numTables; st++) {
-      if (   0 == getUSHORT (4 + 8*st)
-          &amp;&amp; 5 == getUSHORT (4 + 8*st + 2)) {
+      if (   0 == getuint16 (4 + 8*st)
+          &amp;&amp; 5 == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (0, 4 + 8*st + 4);
 
         long numVarSelectorRecords = getULONG (stOffset + 6);
@@ -8188,7 +8168,7 @@ If the intent is really for a Unicode encodings,
 
               for (int j = 0; j &lt; numMappings; j++) {
                 if (charCode == getuint24 (nOffset + 4 + 5*j)) {
-                  return getUSHORT (nOffset + 4 + 5*j + 3); }}}}}}}
+                  return getuint16 (nOffset + 4 + 5*j + 3); }}}}}}}
 
     return 0;
   }
@@ -8724,7 +8704,7 @@ head =
         setIndexToLocFormat (o); }}
 
       setULONG (12, 0x5f0f3cf5); // magicNumber
-//    setSHORT (52, 0); // glyphDataFormat
+//    setint16 (52, 0); // glyphDataFormat
   }
 </code-fragment>
       </section>
@@ -8999,20 +8979,20 @@ public class Head extends Table {
 
   public Flags getFlags () {
     Flags result = new Flags ();
-    result.fromBinary (getUSHORT (16));
+    result.fromBinary (getuint16 (16));
     return result;
   }
 
   public void setFlags (Flags flags) {
-    setUSHORT (16, flags.toBinary ());
+    setuint16 (16, flags.toBinary ());
   }
 
   public int getUnitsPerEm () {
-    return getUSHORT (18);
+    return getuint16 (18);
   }
 
   public void setUnitsPerEm (int u) {
-    setUSHORT (18, u);
+    setuint16 (18, u);
   }
 
   static final java.util.GregorianCalendar baseForDates
@@ -9044,60 +9024,60 @@ public class Head extends Table {
 
   public Bbox getBbox () {
     Bbox b = new Bbox ();
-    b.xMin = getSHORT (36);
-    b.yMin = getSHORT (38);
-    b.xMax = getSHORT (40);
-    b.yMax = getSHORT (42);
+    b.xMin = getint16 (36);
+    b.yMin = getint16 (38);
+    b.xMax = getint16 (40);
+    b.yMax = getint16 (42);
     return b;
   }
 
   public void setBbox (Bbox b) {
-    setSHORT (36, b.xMin);
-    setSHORT (38, b.yMin);
-    setSHORT (40, b.xMax);
-    setSHORT (42, b.yMax);
+    setint16 (36, b.xMin);
+    setint16 (38, b.yMin);
+    setint16 (40, b.xMax);
+    setint16 (42, b.yMax);
   }
 
   public MacStyle getMacStyle () {
     MacStyle result = new MacStyle ();
-    result.fromBinary (getUSHORT (44));
+    result.fromBinary (getuint16 (44));
     return result;
   }
 
   public void setMacStyle (MacStyle flags) {
-    setUSHORT (44, flags.toBinary ());
+    setuint16 (44, flags.toBinary ());
   }
 
   public int getLowestRecPPEM () {
-    return getUSHORT (46);
+    return getuint16 (46);
   }
 
   public void setLowestRecPPEM (int n) {
-    setUSHORT (46, n);
+    setuint16 (46, n);
   }
 
   public int getFontDirectionHint () {
-    return getSHORT (48);
+    return getint16 (48);
   }
 
   public void setFontDirectionHint (int n) {
-    setSHORT (48, n);
+    setint16 (48, n);
   }
 
   public int getIndexToLocFormat () {
-    return getSHORT (50);
+    return getint16 (50);
   }
 
   public void setIndexToLocFormat (int n) {
-    setSHORT (50, n);
+    setint16 (50, n);
   }
 
   public int getGlyphDataFormat () {
-    return getSHORT (52);
+    return getint16 (52);
   }
 
   public void setGlyphDataFormat (int n) {
-    setSHORT (52, n);
+    setint16 (52, n);
   }
 }
 </code-fragment>
@@ -9323,18 +9303,18 @@ hhea =
         me.setFWord (16, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("caret".equals (e.getTagName ())) {
-        me.setSHORT (18, Integer.decode (e.getAttribute ("slopeRise")).intValue());
-        me.setSHORT (20, Integer.decode (e.getAttribute ("slopeRun")).intValue());
-        me.setSHORT (22, Integer.decode (e.getAttribute ("offset")).intValue()); }
+        me.setint16 (18, Integer.decode (e.getAttribute ("slopeRise")).intValue());
+        me.setint16 (20, Integer.decode (e.getAttribute ("slopeRun")).intValue());
+        me.setint16 (22, Integer.decode (e.getAttribute ("offset")).intValue()); }
 
       if ("numberOfHMetrics".equals (e.getTagName ())) {
-        me.setSHORT (34, Integer.decode (e.getAttribute ("v")).intValue()); }}
+        me.setint16 (34, Integer.decode (e.getAttribute ("v")).intValue()); }}
 
-    me.setSHORT (24, 0);
-    me.setSHORT (26, 0);
-    me.setSHORT (28, 0);
-    me.setSHORT (30, 0);
-    me.setSHORT (32, 0);
+    me.setint16 (24, 0);
+    me.setint16 (26, 0);
+    me.setint16 (28, 0);
+    me.setint16 (30, 0);
+    me.setint16 (32, 0);
 
     data = me.serialize ();
   }
@@ -9380,9 +9360,9 @@ hhea =
       conf.ch.element ("xMaxExtent", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "slopeRise", "slopeRise", "CDATA", "" +  getSHORT (18) );
-      at.addAttribute ("", "slopeRun", "slopeRun", "CDATA", "" +  getSHORT (20) );
-      at.addAttribute ("", "offset", "offset", "CDATA", "" +  getSHORT (22) );
+      at.addAttribute ("", "slopeRise", "slopeRise", "CDATA", "" +  getint16 (18) );
+      at.addAttribute ("", "slopeRun", "slopeRun", "CDATA", "" +  getint16 (20) );
+      at.addAttribute ("", "offset", "offset", "CDATA", "" +  getint16 (22) );
       conf.ch.element ("caret", at);
 
       at = new AttributesImpl ();
@@ -9431,11 +9411,11 @@ public class Hhea extends Table {
 <code-fragment id='hhea.methods'>
   <code-title>Hhea class</code-title>
   public int getNumberOfHMetrics () {
-    return getUSHORT (34);
+    return getuint16 (34);
   }
 
   public void setNumberOfHMetrics (int n) {
-    setUSHORT (34, n);
+    setuint16 (34, n);
   }
 </code-fragment>
 
@@ -9597,9 +9577,9 @@ hmtx =
         at = new AttributesImpl ();
         at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
         gid++;
-        at.addAttribute ("", "adv", "adv", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "adv", "adv", "CDATA", "" + getint16 (offset));
         offset += 2;
-        at.addAttribute ("", "lsb", "lsb", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "lsb", "lsb", "CDATA", "" + getint16 (offset));
         offset += 2;
         conf.ch.element ("hMetric", at); }
 
@@ -9607,7 +9587,7 @@ hmtx =
         at = new AttributesImpl ();
         at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
         gid++;
-        at.addAttribute ("", "lsb", "lsb", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "lsb", "lsb", "CDATA", "" + getint16 (offset));
         offset += 2;
         conf.ch.element ("lsb", at); }
 
@@ -9909,46 +9889,46 @@ maxp |=
       Element e = (Element) children.item (i);
 
       if ("numGlyphs".equals (e.getTagName ())) {
-        me.setUSHORT(4, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(4, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxPoints".equals (e.getTagName ())) {
-        me.setUSHORT(6, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(6, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxContours".equals (e.getTagName ())) {
-        me.setUSHORT(8, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(8, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxCompositePoints".equals (e.getTagName ())) {
-        me.setUSHORT(10, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(10, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxCompositeContours".equals (e.getTagName ())) {
-        me.setUSHORT(12, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(12, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxZones".equals (e.getTagName ())) {
-        me.setUSHORT(14, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(14, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxTwilightPoints".equals (e.getTagName ())) {
-        me.setUSHORT(16, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(16, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxStorage".equals (e.getTagName ())) {
-        me.setUSHORT(18, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(18, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxFunctionDefs".equals (e.getTagName ())) {
-        me.setUSHORT(20, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(20, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxInstructionDefs".equals (e.getTagName ())) {
-        me.setUSHORT(22, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(22, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxStackElements".equals (e.getTagName ())) {
-        me.setUSHORT(24, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(24, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxSizeOfInstructions".equals (e.getTagName ())) {
-        me.setUSHORT(26, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(26, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxComponentElements".equals (e.getTagName ())) {
-        me.setUSHORT(28, Integer.decode (e.getAttribute ("v")).intValue()); }
+        me.setuint16(28, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("maxComponentDepth".equals (e.getTagName ())) {
-        me.setUSHORT(30, Integer.decode (e.getAttribute ("v")).intValue()); }}
+        me.setuint16(30, Integer.decode (e.getAttribute ("v")).intValue()); }}
 
     data = me.serialize ();
   }
@@ -9978,60 +9958,60 @@ maxp |=
     conf.ch.startElement ("maxp", at); {
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (4));
+      at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (4));
       conf.ch.element ("numGlyphs", at);
 
       if (version [0] == 1 &amp;&amp; version [1] == 0) {
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (6));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (6));
 	conf.ch.element ("maxPoints", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (8));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (8));
         conf.ch.element ("maxContours", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (10));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (10));
         conf.ch.element ("maxCompositePoints", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (12));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (12));
         conf.ch.element ("maxCompositeContours", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (14));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (14));
         conf.ch.element ("maxZones", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (16));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (16));
         conf.ch.element ("maxTwilightPoints", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (18));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (18));
         conf.ch.element ("maxStorage", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (20));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (20));
         conf.ch.element ("maxFunctionDefs", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (22));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (22));
         conf.ch.element ("maxInstructionDefs", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (24));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (24));
         conf.ch.element ("maxStackElements", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (26));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (26));
         conf.ch.element ("maxSizeOfInstructions", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (28));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (28));
         conf.ch.element ("maxComponentElements", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (30));
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (30));
         conf.ch.element ("maxComponentDepth", at); }
 
       conf.ch.endElement ("maxp"); }
@@ -10064,67 +10044,67 @@ public class Maxp extends Table {
   }
 
   public int getNumGlyphs () {
-    return getUSHORT (4);
+    return getuint16 (4);
   }
 
   public void setNumGlyphs (int n) {
-    setUSHORT (4, n);
+    setuint16 (4, n);
   }
 
   public int getMaxPoints () {
-    return getUSHORT (6);
+    return getuint16 (6);
   }
 
   public void setMaxPoints (int n) {
-    setUSHORT (6, n);
+    setuint16 (6, n);
   }
 
   public int getMaxCountours () {
-    return getUSHORT (8);
+    return getuint16 (8);
   }
 
   public void setMaxContours (int n) {
-    setUSHORT (8, n);
+    setuint16 (8, n);
   }
 
   public int getMaxCompositePoints () {
-    return getUSHORT (10);
+    return getuint16 (10);
   }
 
   public void setMaxCompositePoints (int n) {
-    setUSHORT (10, n);
+    setuint16 (10, n);
   }
 
   public int getMaxCompositeContours () {
-    return getUSHORT (12);
+    return getuint16 (12);
   }
 
   public void setMaxCompositeContours (int n) {
-    setUSHORT (12, n);
+    setuint16 (12, n);
   }
 
   public int getMaxZones () {
-    return getUSHORT (14);
+    return getuint16 (14);
   }
 
   public void setMaxZones (int n) {
-    setUSHORT (14, n);
+    setuint16 (14, n);
   }
 
   public int getMaxComponentElements () {
-    return getUSHORT (28);
+    return getuint16 (28);
   }
 
   public void setMaxComponentElements (int n) {
-    setUSHORT (28, n);
+    setuint16 (28, n);
   }
 
   public int getMaxComponentDepth () {
-    return getUSHORT (30);
+    return getuint16 (30);
   }
 
   public void setMaxComponentDepth (int n) {
-    setUSHORT (30, n);
+    setuint16 (30, n);
   }
 
   public void fixValuesDerivedFromGlyf () {
@@ -12361,14 +12341,14 @@ name =
 
     at = new AttributesImpl ();
     conf.ch.startElement ("name", at); {
-      int stringOffset = getUSHORT (4);
-      for (int i = 0; i &lt; getUSHORT (2); i++) {
-        int platformID = getUSHORT (6 + 12*i);
-        int encodingID = getUSHORT (6 + 12*i + 2);
-        int languageID = getUSHORT (6 + 12*i + 4);
-        int nameID     = getUSHORT (6 + 12*i + 6);
-        int length     = getUSHORT (6 + 12*i + 8);
-        int offset     = getUSHORT (6 + 12*i + 10);
+      int stringOffset = getuint16 (4);
+      for (int i = 0; i &lt; getuint16 (2); i++) {
+        int platformID = getuint16 (6 + 12*i);
+        int encodingID = getuint16 (6 + 12*i + 2);
+        int languageID = getuint16 (6 + 12*i + 4);
+        int nameID     = getuint16 (6 + 12*i + 6);
+        int length     = getuint16 (6 + 12*i + 8);
+        int offset     = getuint16 (6 + 12*i + 10);
 
         at = new AttributesImpl ();
         at.addAttribute ("", "platformID", "platformID", "CDATA",
@@ -12518,17 +12498,17 @@ public class Name extends Table {
     if (charset == null) {
       throw new java.io.UnsupportedEncodingException (); }
 
-    int nameRecordsNumber = getUSHORT (2);
-    int stringStorageOffset = getUSHORT (4);
+    int nameRecordsNumber = getuint16 (2);
+    int stringStorageOffset = getuint16 (4);
 
     for (int i = 0; i &lt; nameRecordsNumber; i++) {
-       if (   getUSHORT (6 + 12*i + 0) == platformID
-           &amp;&amp; getUSHORT (6 + 12*i + 2) == encodingID
+       if (   getuint16 (6 + 12*i + 0) == platformID
+           &amp;&amp; getuint16 (6 + 12*i + 2) == encodingID
            &amp;&amp; (   -1 == languageID
-                       || getUSHORT (6 + 12*i + 4) == languageID)
-           &amp;&amp; getUSHORT (6 + 12*i + 6) == nameID) {
-         int stringLength = getUSHORT (6 + 12*i + 8);
-         int stringOffset = stringStorageOffset + getUSHORT (6 + 12*i + 10);
+                       || getuint16 (6 + 12*i + 4) == languageID)
+           &amp;&amp; getuint16 (6 + 12*i + 6) == nameID) {
+         int stringLength = getuint16 (6 + 12*i + 8);
+         int stringOffset = stringStorageOffset + getuint16 (6 + 12*i + 10);
 
          return new String (data, stringOffset, stringLength, charset); }}
 
@@ -12550,27 +12530,27 @@ public class Name extends Table {
   }
 
   public Representation[] getRepresentations (int nameID) {
-   int nameRecordsNumber = getUSHORT (2);
+   int nameRecordsNumber = getuint16 (2);
 
    int reps = 0;
    for (int i = 0; i &lt; nameRecordsNumber; i++) {
-      if (getUSHORT (6 + 12*i + 6) == nameID) {
+      if (getuint16 (6 + 12*i + 6) == nameID) {
         reps++; }}
 
    Representation[] r = new Representation [reps];
    reps = 0;
 
    for (int i = 0; i &lt; nameRecordsNumber; i++) {
-      if (getUSHORT (6 + 12*i + 6) == nameID) {
-        r [reps++] = new Representation (getUSHORT (6 + 12*i + 0),
-                                         getUSHORT (6 + 12*i + 2),
-                                         getUSHORT (6 + 12*i + 4)); }}
+      if (getuint16 (6 + 12*i + 6) == nameID) {
+        r [reps++] = new Representation (getuint16 (6 + 12*i + 0),
+                                         getuint16 (6 + 12*i + 2),
+                                         getuint16 (6 + 12*i + 4)); }}
 
    return r;
   }
 
   public boolean checkOrder () {
-    int nameRecordsNumber = getUSHORT (2);
+    int nameRecordsNumber = getuint16 (2);
 
     int platformID = -1;
     int encodingID = -1;
@@ -12579,36 +12559,36 @@ public class Name extends Table {
 
     for (int i = 0; i &lt; nameRecordsNumber; i++) {
       int k;
-      k = getUSHORT (6 + 12*i + 0);
+      k = getuint16 (6 + 12*i + 0);
       if (k > platformID) {
-        platformID = getUSHORT (6 + 12*i + 0);
-        encodingID = getUSHORT (6 + 12*i + 2);
-        languageID = getUSHORT (6 + 12*i + 4);
-        nameID     = getUSHORT (6 + 12*i + 6); }
+        platformID = getuint16 (6 + 12*i + 0);
+        encodingID = getuint16 (6 + 12*i + 2);
+        languageID = getuint16 (6 + 12*i + 4);
+        nameID     = getuint16 (6 + 12*i + 6); }
       else if (k &lt; platformID) {
         // System.out.println ("-- platformID " + k);
         return false; }
       else {
-        k = getUSHORT (6 + 12*i + 2);
+        k = getuint16 (6 + 12*i + 2);
         if (k > encodingID) {
-          encodingID = getUSHORT (6 + 12*i + 2);
-          languageID = getUSHORT (6 + 12*i + 4);
-          nameID     = getUSHORT (6 + 12*i + 6); }
+          encodingID = getuint16 (6 + 12*i + 2);
+          languageID = getuint16 (6 + 12*i + 4);
+          nameID     = getuint16 (6 + 12*i + 6); }
         else if (k &lt; encodingID) {
           // System.out.println ("-- encodingID " + platformID + " " + k);
           return false; }
         else {
-          k = getUSHORT (6 + 12*i + 4);
+          k = getuint16 (6 + 12*i + 4);
           if (k > languageID) {
-            languageID = getUSHORT (6 + 12*i + 4);
-            nameID     = getUSHORT (6 + 12*i + 6); }
+            languageID = getuint16 (6 + 12*i + 4);
+            nameID     = getuint16 (6 + 12*i + 6); }
           else if (k &lt; languageID) {
             //System.out.println ("-- languageID " + platformID + " " + encodingID + " " + k);
             return false; }
           else {
-            k = getUSHORT (6 + 12*i + 6);
+            k = getuint16 (6 + 12*i + 6);
             if (k > nameID) {
-              nameID = getUSHORT (6 + 12*i + 6); }
+              nameID = getuint16 (6 + 12*i + 6); }
             else {
               // System.out.println ("-- nameID " + platformID + " " + encodingID + " " + languageID + "  " + k);
               return false; }}}}}
@@ -17655,7 +17635,7 @@ os2_upperOpticalPointSize =
 
     Block me = new Block (tableSize [version], 0);
 
-    me.setUSHORT (0, version);
+    me.setuint16 (0, version);
 
     NodeList children = os2.getChildNodes ();
     for (int i = 0; i &lt; children.getLength (); i++) {
@@ -17664,15 +17644,15 @@ os2_upperOpticalPointSize =
 
       if ("avgCharWidth".equals (e.getTagName ())) {
         int avgCharWidth = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (2, avgCharWidth); }
+        me.setint16 (2, avgCharWidth); }
 
       else if ("weightClass".equals (e.getTagName ())) {
         int weightClass = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (4, weightClass); }
+        me.setint16 (4, weightClass); }
 
       else if ("widthClass".equals (e.getTagName ())) {
         int widthClass = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (6, widthClass); }
+        me.setint16 (6, widthClass); }
 
       else if ("fsType".equals (e.getTagName ())) {
         int format = fsType_version2format [version];
@@ -17681,37 +17661,37 @@ os2_upperOpticalPointSize =
           if (fsTypeNames [j][format] != null) {
             if ("yes".equals (e.getAttribute (fsTypeNames [j][format]))) {
               fsType |= 1 &lt;&lt; j; }}}
-        me.setSHORT (8, fsType); }
+        me.setint16 (8, fsType); }
 
       else if ("subscript".equals (e.getTagName ())) {
         int xsize = Integer.decode (e.getAttribute ("xsize")).intValue();
         int ysize = Integer.decode (e.getAttribute ("ysize")).intValue();
         int xoffset = Integer.decode (e.getAttribute ("xoffset")).intValue();
         int yoffset = Integer.decode (e.getAttribute ("yoffset")).intValue();
-        me.setSHORT (10, xsize);
-        me.setSHORT (12, ysize);
-        me.setSHORT (14, xoffset);
-        me.setSHORT (16, yoffset); }
+        me.setint16 (10, xsize);
+        me.setint16 (12, ysize);
+        me.setint16 (14, xoffset);
+        me.setint16 (16, yoffset); }
 
       else if ("superscript".equals (e.getTagName ())) {
         int xsize = Integer.decode (e.getAttribute ("xsize")).intValue();
         int ysize = Integer.decode (e.getAttribute ("ysize")).intValue();
         int xoffset = Integer.decode (e.getAttribute ("xoffset")).intValue();
         int yoffset = Integer.decode (e.getAttribute ("yoffset")).intValue();
-        me.setSHORT (18, xsize);
-        me.setSHORT (20, ysize);
-        me.setSHORT (22, xoffset);
-        me.setSHORT (24, yoffset); }
+        me.setint16 (18, xsize);
+        me.setint16 (20, ysize);
+        me.setint16 (22, xoffset);
+        me.setint16 (24, yoffset); }
 
       else if ("strikeout".equals (e.getTagName ())) {
         int size = Integer.decode (e.getAttribute ("size")).intValue();
         int position = Integer.decode (e.getAttribute ("position")).intValue();
-        me.setSHORT (26, size);
-        me.setSHORT (28, position); }
+        me.setint16 (26, size);
+        me.setint16 (28, position); }
 
       else if ("familyClass".equals (e.getTagName ())) {
         int cl = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (30, cl); }
+        me.setint16 (30, cl); }
 
       else if ("panose".equals (e.getTagName ())) {
         int familyType = Integer.decode (e.getAttribute ("familyType")).intValue();
@@ -17758,27 +17738,27 @@ os2_upperOpticalPointSize =
           if (fsSelectionNames [j][format] != null) {
             if ("yes".equals (e.getAttribute (fsSelectionNames [j][format]))) {
               fsSelection |= 1 &lt;&lt; j; }}}
-        me.setUSHORT (62, fsSelection); }
+        me.setuint16 (62, fsSelection); }
 
       else if ("charIndex".equals (e.getTagName ())) {
         int first = Integer.decode (e.getAttribute ("first")).intValue();
         int last  = Integer.decode (e.getAttribute ("last")).intValue();
-        me.setUSHORT (64, first);
-        me.setUSHORT (66, last); }
+        me.setuint16 (64, first);
+        me.setuint16 (66, last); }
 
       else if ("typo".equals (e.getTagName ())) {
         int ascender = Integer.decode (e.getAttribute ("ascender")).intValue();
         int descender = Integer.decode (e.getAttribute ("descender")).intValue();
         int linegap = Integer.decode (e.getAttribute ("linegap")).intValue();
-        me.setSHORT (68, ascender);
-        me.setSHORT (70, descender);
-        me.setSHORT (72, linegap); }
+        me.setint16 (68, ascender);
+        me.setint16 (70, descender);
+        me.setint16 (72, linegap); }
 
       else if ("win".equals (e.getTagName ())) {
         int ascent = Integer.decode (e.getAttribute ("ascent")).intValue();
         int descent = Integer.decode (e.getAttribute ("descent")).intValue();
-        me.setSHORT (74, ascent);
-        me.setSHORT (76, descent); }
+        me.setint16 (74, ascent);
+        me.setint16 (76, descent); }
 
       else if ("codePageRange".equals (e.getTagName ())) {
         int format = cpNames_version2format [version];
@@ -17792,31 +17772,31 @@ os2_upperOpticalPointSize =
 
       else if ("height".equals (e.getTagName ())) {
         int h = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (86, h); }
+        me.setint16 (86, h); }
 
       else if ("capHeight".equals (e.getTagName ())) {
         int h = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (88, h); }
+        me.setint16 (88, h); }
 
       else if ("defaultChar".equals (e.getTagName ())) {
         int c = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setUSHORT (90, c); }
+        me.setuint16 (90, c); }
 
       else if ("breakChar".equals (e.getTagName ())) {
         int c = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setSHORT (92, c); }
+        me.setint16 (92, c); }
 
       else if ("maxContext".equals (e.getTagName ())) {
         int m = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setUSHORT (94, m); }
+        me.setuint16 (94, m); }
 
       else if ("lowerOpticalPointSize".equals (e.getTagName ())) {
         int v = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setUSHORT (96, v); }
+        me.setuint16 (96, v); }
 
       else if ("upperOpticalPointSize".equals (e.getTagName ())) {
         int v = Integer.decode (e.getAttribute ("v")).intValue();
-        me.setUSHORT (98, v); }}
+        me.setuint16 (98, v); }}
 
     data = me.serialize ();
   }
@@ -17831,7 +17811,7 @@ os2_upperOpticalPointSize =
   public void toXML (DecompilerConfig conf)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-    int version = getUSHORT (0);
+    int version = getuint16 (0);
     if (version &lt; 0 || 5 &lt; version) {
       throw new InvalidFontException ("unsupported OS/2 table version ("
                                       + version + ") for decompilation"); }
@@ -17844,19 +17824,19 @@ os2_upperOpticalPointSize =
     conf.ch.startElement ("OS2", at); {
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", "" +  getSHORT (2) );
+      at.addAttribute ("", "v", "v", "CDATA", "" +  getint16 (2) );
       conf.ch.element ("avgCharWidth", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", "" +  getUSHORT (4) );
+      at.addAttribute ("", "v", "v", "CDATA", "" +  getuint16 (4) );
       conf.ch.element ("weightClass", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", "" +  getUSHORT (6) );
+      at.addAttribute ("", "v", "v", "CDATA", "" +  getuint16 (6) );
       conf.ch.element ("widthClass", at);
 
       at = new AttributesImpl ();
-      int fsType = getUSHORT (8);
+      int fsType = getuint16 (8);
       int fsTypeFormat = fsType_version2format [version];
       for (mask = 1, j = 0; j &lt; fsTypeNames.length; mask &lt;&lt;= 1, j++) {
         if (fsTypeNames [j][fsTypeFormat] != null) {
@@ -17866,26 +17846,26 @@ os2_upperOpticalPointSize =
       conf.ch.element ("fsType", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "xsize", "xsize", "CDATA", "" +  getSHORT (10));
-      at.addAttribute ("", "ysize", "ysize", "CDATA", "" +  getSHORT (12));
-      at.addAttribute ("", "xoffset", "xoffset", "CDATA", "" +  getSHORT (14));
-      at.addAttribute ("", "yoffset", "yoffset", "CDATA", "" +  getSHORT (16));
+      at.addAttribute ("", "xsize", "xsize", "CDATA", "" +  getint16 (10));
+      at.addAttribute ("", "ysize", "ysize", "CDATA", "" +  getint16 (12));
+      at.addAttribute ("", "xoffset", "xoffset", "CDATA", "" +  getint16 (14));
+      at.addAttribute ("", "yoffset", "yoffset", "CDATA", "" +  getint16 (16));
       conf.ch.element ("subscript", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "xsize", "xsize", "CDATA", "" +  getSHORT (18));
-      at.addAttribute ("", "ysize", "ysize", "CDATA", "" +  getSHORT (20));
-      at.addAttribute ("", "xoffset", "xoffset", "CDATA", "" +  getSHORT (22));
-      at.addAttribute ("", "yoffset", "yoffset", "CDATA", "" +  getSHORT (24));
+      at.addAttribute ("", "xsize", "xsize", "CDATA", "" +  getint16 (18));
+      at.addAttribute ("", "ysize", "ysize", "CDATA", "" +  getint16 (20));
+      at.addAttribute ("", "xoffset", "xoffset", "CDATA", "" +  getint16 (22));
+      at.addAttribute ("", "yoffset", "yoffset", "CDATA", "" +  getint16 (24));
       conf.ch.element ("superscript", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "size", "size", "CDATA", "" +  getSHORT (26));
-      at.addAttribute ("", "position", "position", "CDATA", "" +  getSHORT (28));
+      at.addAttribute ("", "size", "size", "CDATA", "" +  getint16 (26));
+      at.addAttribute ("", "position", "position", "CDATA", "" +  getint16 (28));
       conf.ch.element ("strikeout", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", "" +  getSHORT (30) );
+      at.addAttribute ("", "v", "v", "CDATA", "" +  getint16 (30) );
       conf.ch.element ("familyClass", at);
 
       at = new AttributesImpl ();
@@ -17928,7 +17908,7 @@ os2_upperOpticalPointSize =
 
       at = new AttributesImpl ();
       int fsSelectionFormat = fsSelectionNames_version2format [version];
-      int fsSelection = getUSHORT (62);
+      int fsSelection = getuint16 (62);
       for (j = 0; j &lt; fsSelectionNames.length; j++) {
         if (fsSelectionNames [j][fsSelectionFormat] != null) {
           at.addAttribute ("", fsSelectionNames [j][fsSelectionFormat],
@@ -17937,19 +17917,19 @@ os2_upperOpticalPointSize =
       conf.ch.element ("fsSelection", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "first", "first", "CDATA", "" +  getUSHORT (64) );
-      at.addAttribute ("", "last", "last", "CDATA", "" +  getUSHORT (66) );
+      at.addAttribute ("", "first", "first", "CDATA", "" +  getuint16 (64) );
+      at.addAttribute ("", "last", "last", "CDATA", "" +  getuint16 (66) );
       conf.ch.element ("charIndex", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "ascender", "ascender", "CDATA", "" +  getSHORT (68) );
-      at.addAttribute ("", "descender", "descender", "CDATA", "" +  getSHORT (70) );
-      at.addAttribute ("", "linegap", "linegap", "CDATA", "" +  getSHORT (72) );
+      at.addAttribute ("", "ascender", "ascender", "CDATA", "" +  getint16 (68) );
+      at.addAttribute ("", "descender", "descender", "CDATA", "" +  getint16 (70) );
+      at.addAttribute ("", "linegap", "linegap", "CDATA", "" +  getint16 (72) );
       conf.ch.element ("typo", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "ascent", "ascent", "CDATA", "" +  getSHORT (74) );
-      at.addAttribute ("", "descent", "descent", "CDATA", "" +  getSHORT (76) );
+      at.addAttribute ("", "ascent", "ascent", "CDATA", "" +  getint16 (74) );
+      at.addAttribute ("", "descent", "descent", "CDATA", "" +  getint16 (76) );
       conf.ch.element ("win", at);
 
       if (version > 0) {
@@ -17964,32 +17944,32 @@ os2_upperOpticalPointSize =
 
       if (version >= 2) {
 	at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" +  getSHORT (86) );
+        at.addAttribute ("", "v", "v", "CDATA", "" +  getint16 (86) );
         conf.ch.element ("height", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" +  getSHORT (88) );
+        at.addAttribute ("", "v", "v", "CDATA", "" +  getint16 (88) );
         conf.ch.element ("capHeight", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" +  getUSHORT (90) );
+        at.addAttribute ("", "v", "v", "CDATA", "" +  getuint16 (90) );
         conf.ch.element ("defaultChar", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" +  getUSHORT (92) );
+        at.addAttribute ("", "v", "v", "CDATA", "" +  getuint16 (92) );
         conf.ch.element ("breakChar", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" +  getUSHORT (94) );
+        at.addAttribute ("", "v", "v", "CDATA", "" +  getuint16 (94) );
         conf.ch.element ("maxContext", at); }
 
       if (version >= 5) {
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (96) );
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (96) );
         conf.ch.element ("lowerOpticalPointSize", at);
 
         at = new AttributesImpl ();
-        at.addAttribute ("", "v", "v", "CDATA", "" + getUSHORT (98) );
+        at.addAttribute ("", "v", "v", "CDATA", "" + getuint16 (98) );
         conf.ch.element ("upperOpticalPointSize", at); }
 
       conf.ch.endElement ("OS2"); }
@@ -18022,23 +18002,23 @@ public class OS2 extends Table {
   }
 
   public int getTypoAscender () {
-    return getSHORT (68);
+    return getint16 (68);
   }
 
   public int getTypoDescender () {
-    return getSHORT (70);
+    return getint16 (70);
   }
 
   public int getTypoLineGap () {
-    return getSHORT (72);
+    return getint16 (72);
   }
 
   public int getXHeight () {
-    return getSHORT (86);
+    return getint16 (86);
   }
 
   public int getCapHeight () {
-    return getSHORT (88);
+    return getint16 (88);
   }
 
   <code-include linkend='os2.methods'/>
@@ -19101,7 +19081,7 @@ public class OS2 extends Table {
 <code-fragment id='os2.methods'>
   <code-title>fsType</code-title>
   public int getFsType () {
-    return getUSHORT (8);
+    return getuint16 (8);
   }
 
   public boolean allowsSubsettingOutlineEmbedding () {
@@ -20517,12 +20497,12 @@ post_common =
         int gid = Integer.decode (e.getAttribute ("id")).intValue ();
         names [gid] = e.getAttribute ("name"); }}
 
-    me.setUSHORT (32, nbGids);
+    me.setuint16 (32, nbGids);
     int indexOffset = 34;
     int charOffset = indexOffset + nbGids * 2;
 
     for (int gid = 0; gid &lt; nbGids; gid++) {
-      me.setUSHORT (indexOffset, 258 + gid);
+      me.setuint16 (indexOffset, 258 + gid);
       indexOffset += 2;
 
       char[] name = names [gid].toCharArray ();
@@ -20909,13 +20889,13 @@ public class Post extends Table {
     int [] version = getFixed (0);
 
     if (version [0] == 2 &amp;&amp; version [1] == 0) {
-      int numGlyphs = getUSHORT (32);
+      int numGlyphs = getuint16 (32);
       int[] positions = new int [numGlyphs];
       int offset = 34;
       int highestIndex = 0;
 
       for (int g = 0; g &lt; numGlyphs; g++) {
-        positions [g] = getUSHORT (offset);
+        positions [g] = getuint16 (offset);
     	if (positions [g] > highestIndex) {
           highestIndex = positions [g]; }
         offset += 2; }
@@ -21155,7 +21135,7 @@ glyph_attributes =
         Element e = (Element) l.item (gid);
 
         if (shortLoca) {
-          font.loca.setUSHORT (2 * gid, offset / 2); }
+          font.loca.setuint16 (2 * gid, offset / 2); }
         else {
           font.loca.setuint32 (4 * gid, offset); }
 
@@ -21165,7 +21145,7 @@ glyph_attributes =
         offset += s; }
 
       if (shortLoca) {
-        font.loca.setUSHORT (2 * l.getLength (), offset / 2); }
+        font.loca.setuint16 (2 * l.getLength (), offset / 2); }
       else {
         font.loca.setuint32 (4 * l.getLength (), offset); }
   }
@@ -21198,10 +21178,10 @@ glyph_attributes =
 
         int nbContours = getSHORT (offset);
 
-        at.addAttribute ("", "xMin", "xMin", "CDATA", "" + getSHORT (offset + 2));
-        at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getSHORT (offset + 4));
-        at.addAttribute ("", "xMax", "xMax", "CDATA", "" + getSHORT (offset + 6));
-        at.addAttribute ("", "yMax", "yMax", "CDATA", "" + getSHORT (offset + 8));
+        at.addAttribute ("", "xMin", "xMin", "CDATA", "" + getint16 (offset + 2));
+        at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getint16 (offset + 4));
+        at.addAttribute ("", "xMax", "xMax", "CDATA", "" + getint16 (offset + 6));
+        at.addAttribute ("", "yMax", "yMax", "CDATA", "" + getint16 (offset + 8));
 
         offset += 10;
 
@@ -21255,17 +21235,17 @@ public class Glyf extends Table {
   <code-title>Glyf methods</code-title>
   public boolean isComposite (int gid) {
     int offset = (int) font.loca.getGlyphLocation (gid);
-    return getSHORT (offset) &lt; 0;
+    return getint16 (offset) &lt; 0;
   }
 
   public BoundingBox getGlyphBoundingBox (int gid) {
     BoundingBox b = new BoundingBox ();
 
     int offset = (int)font.loca.getGlyphLocation (gid);
-    b.xmin = getSHORT (offset + 2);
-    b.ymin = getSHORT (offset + 4);
-    b.xmax = getSHORT (offset + 6);
-    b.ymax = getSHORT (offset + 8);
+    b.xmin = getint16 (offset + 2);
+    b.ymin = getint16 (offset + 4);
+    b.xmax = getint16 (offset + 6);
+    b.ymax = getint16 (offset + 8);
     return b;
   }
 </code-fragment>
@@ -22139,7 +22119,7 @@ component_scale |=
       while (true) {
         AttributesImpl at = new AttributesImpl ();
 
-        int flags = getUSHORT (offset);
+        int flags = getuint16 (offset);
         at.addAttribute ("", "flags", "flags", "CDATA",
                          "0x" + Integer.toHexString (flags &amp; 0x1e06));
         offset += 2;
@@ -22207,7 +22187,7 @@ component_scale |=
           break; }}
 
       if (we_have_instructions) {
-        int numInstr = getUSHORT (offset); offset += 2;
+        int numInstr = getuint16 (offset); offset += 2;
         String opcodes = "";
         String prefix = "";
         for (int i = 0; i &lt; numInstr; i++) {
@@ -22263,10 +22243,10 @@ component_scale |=
 
     int offset = (int) font.loca.getGlyphLocation (gid);
 
-    if (getSHORT (offset) >= 0) {
+    if (getint16 (offset) >= 0) {
       maxpValues.componentDepth = 0;
-      maxpValues.numContours = getUSHORT (offset);
-      maxpValues.numPoints = getUSHORT (offset + 10 + (maxpValues.numContours-1) * 2) + 1;
+      maxpValues.numContours = getuint16 (offset);
+      maxpValues.numPoints = getuint16 (offset + 10 + (maxpValues.numContours-1) * 2) + 1;
 
       maxpValues.numCompositeContours = maxpValues.numContours;
       maxpValues.numCompositePoints = maxpValues.numPoints; }
@@ -22277,8 +22257,8 @@ component_scale |=
       offset += 10;
 
       while (true) {
-        int flags = getUSHORT (offset);
-        MaxpValues maxpValues2 = getMaxpValues (getUSHORT (offset + 2));
+        int flags = getuint16 (offset);
+        MaxpValues maxpValues2 = getMaxpValues (getuint16 (offset + 2));
 
         maxpValues.numCompositePoints += maxpValues2.numCompositePoints;
         maxpValues.numCompositeContours += maxpValues2.numCompositeContours;
@@ -22447,14 +22427,14 @@ public class Loca extends Table {
   public long getGlyphLocation (int gid) {
 
     if (font.head.getIndexToLocFormat () == 0) {
-      return getUSHORT (gid * 2) * 2; }
+      return getuint16 (gid * 2) * 2; }
     else {
       return getULONG (gid * 4); }
   }
 
   public void setGlyphLocation (int gid, int offset) {
     if (font.head.getIndexToLocFormat () == 0) {
-      setUSHORT (gid * 2, offset / 2); }
+      setuint16 (gid * 2, offset / 2); }
     else {
       setULONG (gid * 4, offset); }
   }
@@ -24591,7 +24571,7 @@ public abstract class LookupTable extends LayoutTable {
 <code-fragment id='method_Table_findLookups2'>
   <code-title>Find LangSys table for 'scriptTag'/'langSysTag' in ScriptList table</code-title>
   { int scriptListOffset = getScriptListOffset ();
-    int scriptCount = getUSHORT (scriptListOffset);
+    int scriptCount = getuint16 (scriptListOffset);
 
     for (int scr = 0; scr &lt; scriptCount; scr++) {
       if (scriptTag == getULONG (scriptListOffset + 2 + 6*scr)) {
@@ -24605,7 +24585,7 @@ public abstract class LookupTable extends LayoutTable {
   <code-title>Method to get the list of script/languages</code-title>
   public String[][] getScriptLangList () {
     int scriptListOffset = getScriptListOffset ();
-    int scriptCount = getUSHORT (scriptListOffset);
+    int scriptCount = getuint16 (scriptListOffset);
 
     String[][] result = new String [scriptCount][];
 
@@ -24623,7 +24603,7 @@ public abstract class LookupTable extends LayoutTable {
   <code-title>Method to get the names of features in a script/language</code-title>
   public String[] getFeatureNames (String script, String language) {
     int scriptListOffset = getScriptListOffset ();
-    int scriptCount = getUSHORT (scriptListOffset);
+    int scriptCount = getuint16 (scriptListOffset);
 
     long scriptTag = Tag.string2tag (script);
     long languageTag = Tag.string2tag (language);
@@ -24648,7 +24628,7 @@ public abstract class LookupTable extends LayoutTable {
   <code-title>ScriptList validation</code-title>
   { if (! available (scriptListOffset, 2)) {
       return; }
-    int scriptCount = getUSHORT (scriptListOffset);
+    int scriptCount = getuint16 (scriptListOffset);
 
     if (! claim ("script list", scriptListOffset, 2 + 6*scriptCount)) {
       return; }
@@ -24895,7 +24875,7 @@ public abstract class LookupTable extends LayoutTable {
 
 <code-fragment id='method_Table_findLookups3'>
   <code-title>Find LangSys table for 'langSysTag' in Script table at 'scriptOffset'</code-title>
-  { int langSysCount = getUSHORT (scriptOffset + 2);
+  { int langSysCount = getuint16 (scriptOffset + 2);
     for (int lang = 0; lang &lt; langSysCount; lang++) {
       if (langSysTag == getULONG (scriptOffset + 4 + 6*lang)) {
         langSysOffset = getOffset (scriptOffset, 4 + 6*lang + 4);
@@ -24909,7 +24889,7 @@ public abstract class LookupTable extends LayoutTable {
 
 <code-fragment id='LookupTable_getScriptLangList_2'>
   <code-title>ddd</code-title>
-  { int langSysCount = getUSHORT (scriptOffset + 2);
+  { int langSysCount = getuint16 (scriptOffset + 2);
     int defaultLangSysOffset = getOffset (scriptOffset);
 
     int n = langSysCount;
@@ -24928,7 +24908,7 @@ public abstract class LookupTable extends LayoutTable {
 
 <code-fragment id='LookupTable_getFeatureNames_2'>
   <code-title>Return the names of features for 'scriptOffset', if any</code-title>
-  { int langSysCount = getUSHORT (scriptOffset + 2);
+  { int langSysCount = getuint16 (scriptOffset + 2);
     int defaultLangSysOffset = getOffset (scriptOffset);
 
     for (int lang = 0; lang &lt; langSysCount; lang++) {
@@ -25719,10 +25699,10 @@ public abstract class LookupTable extends LayoutTable {
   { for (int f = 0; f &lt; selectedFeatureIndicesCount; f++) {
       int featureOffset
          = featureListOffset
-           + getUSHORT (featureListOffset + 2 + selectedFeatureIndices[f]*6 + 4);
-      int lookupCount = getUSHORT (featureOffset + 2);
+           + getuint16 (featureListOffset + 2 + selectedFeatureIndices[f]*6 + 4);
+      int lookupCount = getuint16 (featureOffset + 2);
       for (int l = 0; l &lt; lookupCount; l++) {
-        selectedLookups.add (getUSHORT (featureOffset + 4 + l*2)); }}}
+        selectedLookups.add (getuint16 (featureOffset + 4 + l*2)); }}}
 </code-fragment>
 
       </section>
@@ -26743,9 +26723,9 @@ public abstract class LookupTable extends LayoutTable {
     try {
       int lookupOffset = getLookupOffset (lookupIndex);
 
-      int lookupType = getUSHORT (lookupOffset);
-      int lookupFlag = getUSHORT (lookupOffset + 2);
-      int subtableCount = getUSHORT (lookupOffset + 4);
+      int lookupType = getuint16 (lookupOffset);
+      int lookupFlag = getuint16 (lookupOffset + 2);
+      int subtableCount = getuint16 (lookupOffset + 4);
 
 
       if (lookupFlagCovers (lookupFlag, gr.glyphAt (curGlyph))) {
@@ -28085,11 +28065,11 @@ public class ClassdefTableBlock extends Block {
                                       String element, AttributesImpl at)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-    switch (getUSHORT (offset)) {
+    switch (getuint16 (offset)) {
       <code-include linkend='LayoutTable.classDefTableToXMLEmit.cases'/>
       default: {
         throw new InvalidFontException ("illegal classdef format at offset "
-                                        + offset + ": " + getUSHORT (offset)); }}
+                                        + offset + ": " + getuint16 (offset)); }}
   }
 </code-fragment>
       </section>
@@ -28107,7 +28087,7 @@ public class ClassdefTableBlock extends Block {
     if (glyph == -1) {
       return -1; }
 
-    int format = getUSHORT (offset);
+    int format = getuint16 (offset);
 
     switch (format) {
       case 1: { <code-include linkend='sub_classIndex1'/> }
@@ -28306,11 +28286,11 @@ public class ClassdefTableBlock extends Block {
 
 <code-fragment id='sub_classIndex1'>
   <code-title>Find class in format 1 and return it</code-title>
-  { int startGlyph = getUSHORT (offset + 2);
-    int glyphCount = getUSHORT (offset + 4);
+  { int startGlyph = getuint16 (offset + 2);
+    int glyphCount = getuint16 (offset + 4);
 
     if (startGlyph &lt;= glyph &amp;&amp; glyph &lt; startGlyph + glyphCount) {
-      return getUSHORT (offset + 6 + (glyph - startGlyph)*2); }
+      return getuint16 (offset + 6 + (glyph - startGlyph)*2); }
 
     return 0; }
 </code-fragment>
@@ -28652,22 +28632,22 @@ public class ClassdefTableBlock extends Block {
 
 <code-fragment id='sub_classIndex2'>
   <code-title>Find class index in format 2 and return it</code-title>
-  { int rangeCount = getUSHORT (offset + 2);
+  { int rangeCount = getuint16 (offset + 2);
 
     int min = 0;
     int max = rangeCount - 1;
 
     while (min &lt;= max) {
       int mid = (min + max) / 2;
-      int start = getUSHORT (offset + 4 + mid*6);
-      int stop = getUSHORT (offset + 4 + mid*6 + 2);
+      int start = getuint16 (offset + 4 + mid*6);
+      int stop = getuint16 (offset + 4 + mid*6 + 2);
 
       if (glyph &lt; start) {
         max = mid - 1; }
       else if (stop &lt; glyph) {
         min = mid + 1; }
       else {
-        return getUSHORT (offset + 4 + mid*6 + 4); }}
+        return getuint16 (offset + 4 + mid*6 + 4); }}
 
     return 0; }
 </code-fragment>
@@ -34378,7 +34358,7 @@ public class Gdef extends LayoutTable {
   public int getGlyphClass (int glyph)
     throws InvalidFontException {
 
-    int glyphClassOffset = getUSHORT (4);
+    int glyphClassOffset = getuint16 (4);
     return classIndex (glyph, glyphClassOffset);
   }
 </code-fragment>
@@ -35166,7 +35146,7 @@ public class Gdef extends LayoutTable {
   public int getMarkAttachClass (int glyph)
     throws InvalidFontException {
 
-    int markAttachOffset = getUSHORT (10);
+    int markAttachOffset = getuint16 (10);
 
     if (markAttachOffset != 0) {
       return classIndex (glyph, markAttachOffset); }
@@ -44506,7 +44486,7 @@ public class ValueRecord {
     if (counts [offset] > 1) {
       return; }
 
-    switch (getUSHORT (offset)) {
+    switch (getuint16 (offset)) {
       <code-include linkend='LayoutTable.anchorTableToXMLCount.cases'/> }
   }
 
@@ -44535,7 +44515,7 @@ public class ValueRecord {
       anchorTableToXMLEmit (conf, offset, counts, "anchorTable", at);
       counts [offset] = 0; }
 
-    switch (getUSHORT (offset)) {
+    switch (getuint16 (offset)) {
       <code-include linkend='LayoutTable.anchorTableToXML.cases'/> }
   }
 
@@ -44544,8 +44524,8 @@ public class ValueRecord {
                                     String element, AttributesImpl at)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-    at.addAttribute ("", "format", "format", "CDATA", "" + getUSHORT (offset));
-    switch (getUSHORT (offset)) {
+    at.addAttribute ("", "format", "format", "CDATA", "" + getuint16 (offset));
+    switch (getuint16 (offset)) {
       <code-include linkend='LayoutTable.anchorTableToXMLEmit.cases'/> }
   }
 </code-fragment>
@@ -49288,7 +49268,7 @@ public class Gsub extends LookupTable {
 <code-fragment id='validate_gsub_1'>
   <code-title>GSUB 1 subtable validation</code-title>
   ensureAvailableBytes (gsub, 0, 2);
-  int substFormat = getUSHORT (stOffset);
+  int substFormat = getuint16 (stOffset);
   switch (substFormat) {
     case 1: { <code-include linkend='validate_gsub_1_1'/>; break; }
     case 2: { <code-include linkend='validate_gsub_1_2'/>; break; }
@@ -49715,7 +49695,7 @@ public class Gsub extends LookupTable {
   <code-title>Validate GSUB 1/1 subtable</code-title>
   ensureAvailableBytes (stOffset, 6);
   markByteRange (stOffset, 6, FRAGMENT_TYPE_GSUB_1_1);
-  int coverageOffset = stOffset + getUSHORT (stOffset + 2);
+  int coverageOffset = stOffset + getuint16 (stOffset + 2);
   validateCoverageTable (coverageOffset);
   warnIfCoverageOverlapsLookupFlag (lookupFlag, gsub, coverageOffset);
 </code-fragment>
@@ -52143,7 +52123,7 @@ public class Gsub extends LookupTable {
       while (lookupFlagCovers (lookupFlag, gr.glyphAt (inPos))) {
         inPos++; }
 
-      if (gr.glyphAt (inPos) != getUSHORT (ruleOffset + 4 + 2*(i-1))) {
+      if (gr.glyphAt (inPos) != getuint16 (ruleOffset + 4 + 2*(i-1))) {
         return null; }
 
       matchedPositions [i] = inPos;
@@ -52179,7 +52159,7 @@ public class Gsub extends LookupTable {
     if (ci == -1) {
       return lookupNotApplied; }
 
-    int ruleSetOffset = stOffset + getUSHORT (stOffset + 6 + ci*2);
+    int ruleSetOffset = stOffset + getuint16 (stOffset + 6 + ci*2);
     int ruleCount = getuint16 (ruleSetOffset);
 
     for (int s = 0; s &lt; ruleCount; s++) {
@@ -57149,7 +57129,7 @@ Lookahead sequence -                   0  1  2  3
 
 <code-fragment id='lookuptable.methods'>
   public void extensionLookupToXMLCount (int stOffset, int[] counts) {
-    int targetType = getUSHORT (stOffset + 2);
+    int targetType = getuint16 (stOffset + 2);
     int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
 
     lookupSubtableToXMLCount (extensionOffset, counts, targetType);
@@ -57162,7 +57142,7 @@ Lookahead sequence -                   0  1  2  3
                                    int stOffset, int[] counts)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-    int targetType = getUSHORT (stOffset + 2);
+    int targetType = getuint16 (stOffset + 2);
     int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
 
     lookupSubtableToXML (conf, extensionOffset, counts, targetType);
@@ -57172,7 +57152,7 @@ Lookahead sequence -                   0  1  2  3
                                         int stOffset, int[] counts)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-    int targetType = getUSHORT (stOffset + 2);
+    int targetType = getuint16 (stOffset + 2);
     int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
 
     AttributesImpl at = new AttributesImpl ();
@@ -57198,7 +57178,7 @@ Lookahead sequence -                   0  1  2  3
                            int stOffset, GlyphRun gr, int curGlyph)
       throws InvalidFontException {
 
-    int extensionLookupType = getUSHORT (stOffset + 2);
+    int extensionLookupType = getuint16 (stOffset + 2);
     int extensionOffset = stOffset + (int)getULONG (stOffset + 4);
 
     return applyLookupSubtable (lookupIndex, extensionLookupType,
@@ -57534,8 +57514,8 @@ Lookahead sequence -                   0  1  2  3
                           0);
 
     for (int su = 0; su &lt; count; su++) {
-      int sequenceIndex = getUSHORT (offset);
-      int lookupListIndex = getUSHORT (offset + 2);
+      int sequenceIndex = getuint16 (offset);
+      int lookupListIndex = getuint16 (offset + 2);
       offset += 4;
       LookupResult r = applyLookup (lookupListIndex, gr,
                                     matchedPositions [sequenceIndex]);
@@ -62795,10 +62775,10 @@ Lookahead sequence -                   0  1  2  3
 
     AttributesImpl at = new AttributesImpl ();
     at.addAttribute ("", "version", "version", "CDATA", "" + getULONG (0));
-    at.addAttribute ("", "flags", "flags", "CDATA", "" + getUSHORT (6));
+    at.addAttribute ("", "flags", "flags", "CDATA", "" + getuint16 (6));
 
     conf.ch.startElement ("DSIG", at); {
-      for (int i = 0; i &lt; getUSHORT (4); i++) {
+      for (int i = 0; i &lt; getuint16 (4); i++) {
         at = new AttributesImpl ();
         at.addAttribute ("", "format", "format", "CDATA",
                          "" + getULONG (8 + 12*i));
@@ -63344,9 +63324,9 @@ hdmx =
 
     int offset = 0;
 
-    me.setUSHORT (offset,
+    me.setuint16 (offset,
                   Integer.decode (hdmx.getAttribute ("version")).intValue ());
-    me.setSHORT (offset + 2, numRecords);
+    me.setint16 (offset + 2, numRecords);
     me.setLONG (offset + 4, sizeDeviceRecord);
 
     offset += 8;
@@ -63382,13 +63362,13 @@ hdmx =
       throws org.xml.sax.SAXException {
 
     AttributesImpl at = new AttributesImpl ();
-    at.addAttribute ("", "version", "version", "CDATA", "" + getUSHORT (0));
+    at.addAttribute ("", "version", "version", "CDATA", "" + getuint16 (0));
 
     conf.ch.startElement ("hdmx", at); {
       int offset;
       int numGlyphs = font.maxp.getNumGlyphs ();
 
-      int numRecords = getSHORT (2);
+      int numRecords = getint16 (2);
       int sizeDeviceRecord = getLONG (4);
 
       offset = 8;
@@ -65268,13 +65248,13 @@ VDMX =
       throws org.xml.sax.SAXException {
 
     AttributesImpl at = new AttributesImpl ();
-    at.addAttribute ("", "version", "version", "CDATA", "" + getUSHORT (0));
+    at.addAttribute ("", "version", "version", "CDATA", "" + getuint16 (0));
 
     conf.ch.startElement ("VDMX", at); {
       int offset;
 
-      int numRecs = getUSHORT (2);
-      int numRatios = getUSHORT (4);
+      int numRecs = getuint16 (2);
+      int numRatios = getuint16 (4);
 
       for (int i = 0; i &lt; numRatios; i++) {
         at = new AttributesImpl ();
@@ -65282,13 +65262,13 @@ VDMX =
         at.addAttribute ("", "xRatio", "xRatio", "CDATA", "" + getuint8 (6 + i*4 + 1));
         at.addAttribute ("", "yStartRatio", "yStartRatio", "CDATA", "" + getuint8 (6 + i*4 + 2));
         at.addAttribute ("", "yEndRatio", "yEndRatio", "CDATA", "" + getuint8 (6 + i*4 + 3));
-        at.addAttribute ("", "groupIndex", "groupIndex", "CDATA", "" + getUSHORT (6 + numRatios*4 + 2*i));
+        at.addAttribute ("", "groupIndex", "groupIndex", "CDATA", "" + getuint16 (6 + numRatios*4 + 2*i));
         conf.ch.element ("ratio", at); }
 
       offset = 6 + numRatios * (4 + 2);
 
       for (int i = 0; i &lt; numRecs; i++) {
-        int nbRecs = getUSHORT (offset);
+        int nbRecs = getuint16 (offset);
         at = new AttributesImpl ();
         at.addAttribute ("", "groupIndex", "groupIndex", "CDATA", "" + offset);
         at.addAttribute ("", "startsz", "startsz", "CDATA", "" + getuint8 (offset + 2));
@@ -65298,9 +65278,9 @@ VDMX =
           offset += 4;
           for (int j = 0; j &lt; nbRecs; j++) {
             at = new AttributesImpl ();
-            at.addAttribute ("", "yPelHeight", "yPelHeight", "CDATA", "" + getUSHORT (offset));
-            at.addAttribute ("", "yMax", "yMax", "CDATA", "" + getSHORT (offset + 2));
-            at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getSHORT (offset + 4));
+            at.addAttribute ("", "yPelHeight", "yPelHeight", "CDATA", "" + getuint16 (offset));
+            at.addAttribute ("", "yMax", "yMax", "CDATA", "" + getint16 (offset + 2));
+            at.addAttribute ("", "yMin", "yMin", "CDATA", "" + getint16 (offset + 4));
             conf.ch.element ("rec", at);
             offset += 6; }
           conf.ch.endElement ("group"); }}
@@ -65869,18 +65849,18 @@ vhea =
         me.setFWord (16, Integer.decode (e.getAttribute ("v")).intValue()); }
 
       if ("caret".equals (e.getTagName ())) {
-        me.setSHORT (18, Integer.decode (e.getAttribute ("slopeRise")).intValue());
-        me.setSHORT (20, Integer.decode (e.getAttribute ("slopeRun")).intValue());
-        me.setSHORT (22, Integer.decode (e.getAttribute ("offset")).intValue()); }
+        me.setint16 (18, Integer.decode (e.getAttribute ("slopeRise")).intValue());
+        me.setint16 (20, Integer.decode (e.getAttribute ("slopeRun")).intValue());
+        me.setint16 (22, Integer.decode (e.getAttribute ("offset")).intValue()); }
 
       if ("numberOfVMetrics".equals (e.getTagName ())) {
-        me.setSHORT (34, Integer.decode (e.getAttribute ("v")).intValue()); }}
+        me.setint16 (34, Integer.decode (e.getAttribute ("v")).intValue()); }}
 
-    me.setSHORT (24, 0);
-    me.setSHORT (26, 0);
-    me.setSHORT (28, 0);
-    me.setSHORT (30, 0);
-    me.setSHORT (32, 0);
+    me.setint16 (24, 0);
+    me.setint16 (26, 0);
+    me.setint16 (28, 0);
+    me.setint16 (30, 0);
+    me.setint16 (32, 0);
 
     data = me.serialize ();
   }
@@ -65926,9 +65906,9 @@ vhea =
       conf.ch.element ("yMaxExtent", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "slopeRise", "slopeRise", "CDATA", "" +  getSHORT (18) );
-      at.addAttribute ("", "slopeRun", "slopeRun", "CDATA", "" +  getSHORT (20) );
-      at.addAttribute ("", "offset", "offset", "CDATA", "" +  getSHORT (22) );
+      at.addAttribute ("", "slopeRise", "slopeRise", "CDATA", "" +  getint16 (18) );
+      at.addAttribute ("", "slopeRun", "slopeRun", "CDATA", "" +  getint16 (20) );
+      at.addAttribute ("", "offset", "offset", "CDATA", "" +  getint16 (22) );
       conf.ch.element ("caret", at);
 
       at = new AttributesImpl ();
@@ -65977,11 +65957,11 @@ public class Vhea extends Table {
 <code-fragment id='vhea.methods'>
   <code-title>Vhea class</code-title>
   public int getNumberOfVMetrics () {
-    return getUSHORT (34);
+    return getuint16 (34);
   }
 
   public void setNumberOfVMetrics (int n) {
-    setUSHORT (34, n);
+    setuint16 (34, n);
   }
 </code-fragment>
 
@@ -66194,9 +66174,9 @@ vmtx =
     for (int i = 0; i &lt; metrics.getLength (); i++) {
       Element metric = (Element) metrics.item (i);
       if ("vMetric".equals (metric.getTagName ())) {
-        me.setUSHORT (offset,
+        me.setuint16 (offset,
                       Integer.decode (metric.getAttribute ("adv")).intValue ());
-        me.setSHORT (offset + 2,
+        me.setint16 (offset + 2,
                      Integer.decode (metric.getAttribute ("tsb")).intValue ());
         offset += 4; }
       if ("tsb".equals (metric.getTagName ())) {
@@ -66230,9 +66210,9 @@ vmtx =
         at = new AttributesImpl ();
         at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
         gid++;
-        at.addAttribute ("", "adv", "adv", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "adv", "adv", "CDATA", "" + getint16 (offset));
         offset += 2;
-        at.addAttribute ("", "tsb", "tsb", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "tsb", "tsb", "CDATA", "" + getint16 (offset));
         offset += 2;
         conf.ch.element ("vMetric", at); }
 
@@ -66240,7 +66220,7 @@ vmtx =
         at = new AttributesImpl ();
         at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
         gid++;
-        at.addAttribute ("", "tsb", "tsb", "CDATA", "" + getSHORT (offset));
+        at.addAttribute ("", "tsb", "tsb", "CDATA", "" + getint16 (offset));
         offset += 2;
         conf.ch.element ("tsb", at); }
 
@@ -66500,27 +66480,27 @@ VORG =
 
     int offset = 0;
 
-    me.setUSHORT (offset,
+    me.setuint16 (offset,
                   Integer.decode (vorg.getAttribute ("major")).intValue ());
     offset += 2;
 
-    me.setUSHORT (offset,
+    me.setuint16 (offset,
                   Integer.decode (vorg.getAttribute ("minor")).intValue ());
     offset += 2;
 
-    me.setSHORT (offset,
+    me.setint16 (offset,
                  Integer.decode (vorg.getAttribute ("defaultVertOriginY")).intValue ());
     offset += 2;
 
-    me.setUSHORT (offset, metrics.getLength ());
+    me.setuint16 (offset, metrics.getLength ());
     offset += 2;
 
     for (int i = 0; i &lt; metrics.getLength (); i++) {
       Element metric = (Element) metrics.item (i);
-      me.setUSHORT (offset,
+      me.setuint16 (offset,
                     Integer.decode (metric.getAttribute ("gid")).intValue ());
       offset += 2;
-      me.setSHORT (offset,
+      me.setint16 (offset,
                    Integer.decode (metric.getAttribute ("verOriginY")).intValue ());
       offset += 2; }
 
@@ -66540,25 +66520,25 @@ VORG =
 
     int offset = 0;
     AttributesImpl at = new AttributesImpl ();
-    at.addAttribute ("", "major", "major", "CDATA", "" + getUSHORT (offset));
+    at.addAttribute ("", "major", "major", "CDATA", "" + getuint16 (offset));
     offset += 2;
-    at.addAttribute ("", "minor", "minor", "CDATA", "" + getUSHORT (offset));
+    at.addAttribute ("", "minor", "minor", "CDATA", "" + getuint16 (offset));
     offset += 2;
     at.addAttribute ("", "defaultVertOriginY", "defaultVertOriginY", "CDATA",
-                     "" + getSHORT (offset));
+                     "" + getint16 (offset));
     offset += 2;
 
-    int numVertOriginYMetrics = getUSHORT (offset);
+    int numVertOriginYMetrics = getuint16 (offset);
     offset += 2;
 
     conf.ch.startElement ("VORG", at); {
 
       for (int i = 0; i &lt; numVertOriginYMetrics; i++) {
         at = new AttributesImpl ();
-        at.addAttribute ("", "gid", "gid", "CDATA", "" + getUSHORT (offset));
+        at.addAttribute ("", "gid", "gid", "CDATA", "" + getuint16 (offset));
         offset += 2;
         at.addAttribute ("", "vertOriginY", "vertOriginY", "CDATA",
-                         "" + getSHORT (offset));
+                         "" + getint16 (offset));
         offset += 2;
         conf.ch.element ("vMetric", at); }
 
@@ -66593,13 +66573,13 @@ public class Vorg extends Table {
   }
 
   public int getVerticalOrigin (int glyphID) {
-    int numVertOriginYMetrics = getUSHORT (6);
+    int numVertOriginYMetrics = getuint16 (6);
 
     for (int i = 0; i &lt; numVertOriginYMetrics; i++) {
-      if (glyphID == getUSHORT (8 + 4*i)) {
-        return getSHORT (8 + 4*i + 2); }}
+      if (glyphID == getuint16 (8 + 4*i)) {
+        return getint16 (8 + 4*i + 2); }}
 
-    return getSHORT (4);
+    return getint16 (4);
   }
 
   <code-include linkend='VORG.methods'/>
