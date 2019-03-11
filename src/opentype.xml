@@ -1283,6 +1283,9 @@ public class Decompiler {
     data [offset+1] = (byte) ((v     ) &amp; 0xff);
   }
 
+  protected final void setint16 (int offset, int v) {
+    setuint16 (offset, v); }
+
   protected final int getuint24 (int offset) {
     int b1 = ((int)(getuint8 (offset    ))) &lt;&lt; 16;
     int b2 = ((int)(getuint8 (offset + 1))) &lt;&lt;  8;
