@@ -21784,6 +21784,137 @@ simple_glyph =
     return u;
   }
 </code-fragment>
+
+<para>This class receives descriptions of the lines and curves of contours and computes their bounding box.</para>
+
+<code-fragment package='com.adobe.aots.opentype' class='TTBoundingBox'>
+  <code-title>Type2Bounding class</code-title>
+package com.adobe.aots.opentype;
+
+public class TTBoundingBox {
+  public BoundingBox bb;
+
+  TTBoundingBox () {
+    this.bb = new BoundingBox ();
+    this.bb.xmin = Double.POSITIVE_INFINITY;
+    this.bb.ymin = Double.POSITIVE_INFINITY;
+
+    this.bb.xmax = Double.NEGATIVE_INFINITY;
+    this.bb.ymax = Double.NEGATIVE_INFINITY;
+  }
+
+  private void includeXY (double x, double y) {
+    if (x &lt; bb.xmin) {
+      bb.xmin = x; }
+    if (bb.xmax &lt; x) {
+      bb.xmax = x; }
+    if (y &lt; bb.ymin) {
+      bb.ymin = y; }
+    if (bb.ymax &lt; y) {
+      bb.ymax = y; }
+  }
+
+  public void line (double x1, double y1, double x2, double y2) {
+    includeXY (x1, y1);
+    includeXY (x2, y2);
+  }
+
+  private double at (double t, double z1, double z2, double z3)
+  {
+    double mt = 1 - t;
+    return mt * mt * z1 + 2 * mt * t * z2 + t * t * z3;
+  }
+
+  private void includeAtT (double t,
+                           double x1, double y1, double x2, double y2,
+                           double x3, double y3)
+  {
+    if (0 &lt; t &amp;&amp; t &lt; 1) {
+      includeXY (at (t, x1, x2, x3),
+                 at (t, y1, y2, y3)); }
+  }
+
+  private void includeExtremas (double z1, double z2, double z3,
+                                double x1, double y1, double x2, double y2,
+                                double x3, double y3)
+  {
+    double denom = z1 - 2*z2 + z3;
+    if (Math.abs (denom) &lt; 1e-12) {
+      return; }
+
+      includeAtT ((z1 - z2) / denom,
+                  x1, y1, x2, y2, x3, y3);
+  }
+
+  public void curve (double x1, double y1, double x2, double y2,
+                     double x3, double y3)
+  {
+    includeXY (x1, y1);
+    includeXY (x3, y3);
+
+    includeExtremas (x1, x2, x3,
+                     x1, y1, x2, y2, x3, y3);
+    includeExtremas (y1, y2, y3,
+                     x1, y1, x2, y2, x3, y3);
+  }
+}
+</code-fragment>
+
+<para>Using this class, this method walks the contours of a simple glyph to get their bounding box:</para>
+
+<code-fragment id='glyf.methods'>
+  public BoundingBox getSimpleGlyphContoursBoundingBox (int offset, int nbContours)
+  {
+    TTBoundingBox b = new TTBoundingBox ();
+
+    SimpleGlyphUnpack u = unpackSimpleGlyphContours (offset, nbContours);
+
+      int pt = 0;
+
+      for (int c = 0; c &lt; nbContours; c++) {
+
+        int originx = u.x [pt];
+        int originy = u.y [pt];
+        pt++;
+        boolean lastPointIsOn = true;
+
+        int p0x, p0y, p1x, p1y;
+        p0x = originx;
+        p0y = originy;
+        p1x = 0;  // just to make the compiler happy
+        p1y = 0;
+
+        while (pt &lt;= u.endPts [c]) {
+          if (u.on [pt]) {
+            if (lastPointIsOn) {
+              b.line (p0x, p0y, u.x [pt], u.y [pt]); }
+            else {
+              b.curve (p0x, p0y, p1x, p1y, u.x [pt], u.y [pt]); }
+            p0x = u.x [pt];
+            p0y = u.y [pt];
+            lastPointIsOn = true; }
+
+          else {
+            if (! lastPointIsOn) {
+              int mx = (p1x + u.x [pt]) / 2;
+              int my = (p1y + u.y [pt]) / 2;
+              b.curve (p0x, p0y, p1x, p1y, mx, my);
+              p0x = mx;
+              p0y = my; }
+
+            p1x = u.x [pt];
+            p1y = u.y [pt];
+            lastPointIsOn = false; }
+
+          pt++; }
+
+        if (! lastPointIsOn) {
+          b.curve (p0x, p0y, p1x, p1y, originx, originy); }}
+
+    return b.bb;
+  }
+</code-fragment>
+
       </section>
     </section>
 
