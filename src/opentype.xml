@@ -485,7 +485,7 @@ public class Compiler implements org.xml.sax.ErrorHandler {
           subtables. To facilitate the creation of these tables
           blocks, we have a class, named <varname>Block</varname>. The
           main methods are to set fields in blocks
-          (<varname>setint16</varname>, <varname>setULONG</varname>,
+          (<varname>setint16</varname>, <varname>setuint32</varname>,
           etc), to make one block point to another one
           (<varname>setOffset</varname>,
           <varname>setBigOffset</varname>), and finally to serialize
@@ -568,11 +568,7 @@ import java.util.Vector;
       content [offset+3] = (byte) (value         &amp; 0xff);
     }
 
-    public void setULONG (int offset, int value) {
-      setuint32 (offset, value);
-    }
-
-    public void setLONG (int offset, int value) {
+    public void setint32 (int offset, int value) {
       setuint32 (offset, value);
     }
 
@@ -1314,7 +1310,7 @@ public class Decompiler {
       return 0; }
   }
 
-  protected final long getULONG (int offset) {
+  protected final long getuint32 (int offset) {
     long b1 = ((long)(getuint8 (offset    ))) &lt;&lt; 24;
     long b2 = ((long)(getuint8 (offset + 1))) &lt;&lt; 16;
     long b3 = ((long)(getuint8 (offset + 2))) &lt;&lt;  8;
@@ -1322,19 +1318,11 @@ public class Decompiler {
     return (b1 | b2 | b3 | b4);
   }
 
-  protected final void setULONG (int offset, int value) {
-    setuint32 (offset, value);
-  }
-
   protected final int getint32 (int offset) {
     int x = ((int)data [offset]) * 256;
     x = (x + getuint8 (offset + 1)) * 256;
     x = (x + getuint8 (offset + 2)) * 256;
     return x + getuint8 (offset + 3);
-  }
-
-  protected final int getLONG (int offset) {
-    return getint32 (offset);
   }
 
   protected final void setuint32 (int offset, int value) {
@@ -1352,7 +1340,7 @@ public class Decompiler {
   }
 
   protected final int getLOffset (int offset) {
-    long o = getULONG (offset);
+    long o = getuint32 (offset);
     if (o > Integer.MAX_VALUE) {
       System.out.println ("Offset too big!"); }
     return (int) o;
@@ -1387,7 +1375,7 @@ public class Decompiler {
 
   protected final long getLONGDATETIME (int offset) {
     long x = getint32 (offset) &lt;&lt; 32;
-    x += getULONG (offset + 4);
+    x += getuint32 (offset + 4);
     return x;
   }
 
@@ -1413,7 +1401,7 @@ public class Decompiler {
       throws UnsupportedFontException {
     if (getuint8 (offset) > 0x7f) {
       throw new UnsupportedFontException (exceptionMsg); }
-    return (int) getULONG (offset);
+    return (int) getuint32 (offset);
   }
 </code-fragment>
 
@@ -2155,7 +2143,7 @@ public class Header extends Table {
 
     data = top;
 
-    if (getULONG (0) == Tag.ttcf) {
+    if (getuint32 (0) == Tag.ttcf) {
       return fromTTCBinary2 (in, 0, curOffset, top); }
 
     int numTables = getuint16 (4);
@@ -2183,12 +2171,12 @@ public class Header extends Table {
   public int fromTTCBinary2 (InputStream in, int ttcIndex, int curOffset, byte[] top)
        throws IOException, InvalidFontException {
 
-    long tag = getULONG (0);
+    long tag = getuint32 (0);
     if (tag != Tag.ttcf) {
       throw new InvalidFontException ("invalid TTCTag"); }
 
-    long version = getULONG (4);
-    long ttcCount = getULONG (8);
+    long version = getuint32 (4);
+    long ttcCount = getuint32 (8);
     int ttcHeaderSize = 0;
 
     if (version == 0x00010000) {
@@ -2206,7 +2194,7 @@ public class Header extends Table {
     System.arraycopy (top, 0, data, 0, 12);
     curOffset += in.read (data, 12, ttcHeaderSize - 12);
 
-    long offsetTableOffset = getULONG (12 + ttcIndex * 4);
+    long offsetTableOffset = getuint32 (12 + ttcIndex * 4);
 
     while (curOffset != offsetTableOffset) {
       curOffset += in.skip (offsetTableOffset - curOffset); }
@@ -2287,7 +2275,7 @@ public class Header extends Table {
     TableDesc[] tds = new TableDesc [getuint16 (4)];
     for (int i = 0; i &lt; tds.length; i++) {
       tds [i] = new TableDescByTag ();
-      tds [i].tag    = getULONG   (12 + 16*i);
+      tds [i].tag    = getuint32   (12 + 16*i);
       tds [i].offset = getLOffset (12 + 16*i + 8);
       tds [i].length = getLOffset (12 + 16*i + 12); }
 
@@ -2300,7 +2288,7 @@ public class Header extends Table {
     TableDesc[] tds = new TableDesc [getuint16 (4)];
     for (int i = 0; i &lt; tds.length; i++) {
       tds [i] = new TableDescByOffset ();
-      tds [i].tag    = getULONG   (12 + 16*i);
+      tds [i].tag    = getuint32   (12 + 16*i);
       tds [i].offset = getLOffset (12 + 16*i + 8);
       tds [i].length = getLOffset (12 + 16*i + 12); }
 
@@ -6800,10 +6788,10 @@ If the intent is really for a Unicode encodings,
       Block me = new Block (blockSize, 0);
       me.setuint16 (0, 8);
       me.setuint16 (2, 0);
-      me.setULONG (4, blockSize);
-      me.setULONG (8, language);
+      me.setuint32 (4, blockSize);
+      me.setuint32 (8, language);
       // TODO deal with is32
-      me.setULONG (12 + 8192, 0);
+      me.setuint32 (12 + 8192, 0);
       return me; }
 
     else if ("group".equals (((Element) children.item (0)).getTagName ())) {
@@ -6822,18 +6810,18 @@ If the intent is really for a Unicode encodings,
       Block me = new Block (blockSize, 0);
       me.setuint16 (0, 8);
       me.setuint16 (2, 0);
-      me.setULONG (4, blockSize);
-      me.setULONG (8, language);
+      me.setuint32 (4, blockSize);
+      me.setuint32 (8, language);
       // TODO deal with is32
-      me.setULONG (12 + 8192, ranges.length);
+      me.setuint32 (12 + 8192, ranges.length);
 
       int o = 12 + 8192 + 4;
       for (int i = 0; i &lt; ranges.length; i++) {
-	me.setULONG (o, ranges [i].firstCode);
+	me.setuint32 (o, ranges [i].firstCode);
         o += 4;
-	me.setULONG (o, ranges [i].lastCode);
+	me.setuint32 (o, ranges [i].lastCode);
         o += 4;
-	me.setULONG (o, ranges [i].firstGlyph);
+	me.setuint32 (o, ranges [i].firstGlyph);
         o += 4; }
 
       return me; }
@@ -6868,18 +6856,18 @@ If the intent is really for a Unicode encodings,
       Block me = new Block (blockSize, 0);
       me.setuint16 (0, 8);
       me.setuint16 (2, 0);
-      me.setULONG (4, blockSize);
-      me.setULONG (8, language);
+      me.setuint32 (4, blockSize);
+      me.setuint32 (8, language);
       // TODO deal with is32
-      me.setULONG (12 + 8192, aRanges.length);
+      me.setuint32 (12 + 8192, aRanges.length);
 
       int o = 12 + 8192 + 4;
       for (int i = 0; i &lt; aRanges.length; i++) {
-	me.setULONG (o, aRanges [i].firstCode);
+	me.setuint32 (o, aRanges [i].firstCode);
         o += 4;
-	me.setULONG (o, aRanges [i].lastCode);
+	me.setuint32 (o, aRanges [i].lastCode);
         o += 4;
-	me.setULONG (o, aRanges [i].firstGlyph);
+	me.setuint32 (o, aRanges [i].firstGlyph);
         o += 4; }
 
       return me; }
@@ -7165,10 +7153,10 @@ If the intent is really for a Unicode encodings,
 
     b.setuint16 (0, 10);
     b.setuint16 (2, 0);
-    b.setULONG (4, length);
-    b.setULONG (8, language);
-    b.setULONG (12, firstCharCode);
-    b.setULONG (16, lastCharCode - firstCharCode + 1);
+    b.setuint32 (4, length);
+    b.setuint32 (8, language);
+    b.setuint32 (12, firstCharCode);
+    b.setuint32 (16, lastCharCode - firstCharCode + 1);
     int offset = 20;
     for (int i = firstCharCode; i &lt;= lastCharCode; i++) {
       int glyphid = m.get (i);
@@ -7486,9 +7474,9 @@ If the intent is really for a Unicode encodings,
 
     b.setuint16 (0, 12);
     b.setuint16 (2, 0);
-    b.setULONG (4, length);
-    b.setULONG (8, language);
-    b.setULONG (12, groups);
+    b.setuint32 (4, length);
+    b.setuint32 (8, language);
+    b.setuint32 (12, groups);
 
     int offset = 16 - 12;
     previousCp = -1;
@@ -7499,9 +7487,9 @@ If the intent is really for a Unicode encodings,
       int gid = m.get (x);
       if (previousCp + 1 != cp || previousGid + 1 != gid) {
         offset += 12;
-        b.setULONG (offset, cp);
-        b.setULONG (offset + 8, gid); }
-      b.setULONG (offset + 4, cp);
+        b.setuint32 (offset, cp);
+        b.setuint32 (offset + 8, gid); }
+      b.setuint32 (offset + 4, cp);
       previousCp = cp;
       previousGid = gid; }
 
@@ -7519,12 +7507,12 @@ If the intent is really for a Unicode encodings,
   <code-title>Generate elements for the format 12 cmap subtable at 'stOffset'</code-title>
   if (conf.preciseCmap) {
 
-    long nGroups = getULONG (stOffset + 12);
+    long nGroups = getuint32 (stOffset + 12);
 
     for (int g = 0; g &lt; nGroups; g++) {
-      long startCharCode = getULONG (stOffset + 16 + 12*g);
-      long endCharCode = getULONG (stOffset + 16 + 12*g + 4);
-      long startGlyphID = getULONG (stOffset + 16 + 12*g + 8);
+      long startCharCode = getuint32 (stOffset + 16 + 12*g);
+      long endCharCode = getuint32 (stOffset + 16 + 12*g + 4);
+      long startGlyphID = getuint32 (stOffset + 16 + 12*g + 8);
 
       at = new AttributesImpl ();
       at.addAttribute ("", "code", "code", "CDATA",
@@ -7544,20 +7532,20 @@ If the intent is really for a Unicode encodings,
 <code-fragment id='cmap_format12'>
   <code-title>Return glyph for 'charCode', using format 12 subtable at
      'stOffset'</code-title>
-{ int nGroups = (int)getULONG (stOffset + 12);
+{ int nGroups = (int)getuint32 (stOffset + 12);
   int min = 0;
   int max = nGroups - 1;
   while (min &lt;= max) {
     int s = (min + max) / 2;
-    int startCharCode = (int) getULONG (stOffset + 16 + 12*s);
-    int endCharCode = (int) getULONG (stOffset + 16 + 12*s + 4);
+    int startCharCode = (int) getuint32 (stOffset + 16 + 12*s);
+    int endCharCode = (int) getuint32 (stOffset + 16 + 12*s + 4);
 
     if (charCode &lt; startCharCode) {
       max = s - 1; }
     else if (endCharCode &lt; charCode) {
       min = s + 1; }
     else {
-      int startGlyphID = (int) getULONG (stOffset + 16 + 12*s + 8);
+      int startGlyphID = (int) getuint32 (stOffset + 16 + 12*s + 8);
       return (startGlyphID + (charCode - startCharCode)); }}
   return 0;
 }
@@ -7568,13 +7556,13 @@ If the intent is really for a Unicode encodings,
   { java.util.TreeMap&lt;Integer, Integer> m
         = new java.util.TreeMap&lt;Integer, Integer> ();
 
-    int nGroups = (int)getULONG (stOffset + 12);
+    int nGroups = (int)getuint32 (stOffset + 12);
 
     for (int g = 0; g &lt; nGroups; g++) {
 
-      int startCode = (int)getULONG (stOffset + 16 + 12*g);
-      int endCode = (int)getULONG (stOffset + 16 + 12*g + 4);
-      int glyphID = (int)getULONG (stOffset + 16 + 12*g + 8);
+      int startCode = (int)getuint32 (stOffset + 16 + 12*g);
+      int endCode = (int)getuint32 (stOffset + 16 + 12*g + 4);
+      int glyphID = (int)getuint32 (stOffset + 16 + 12*g + 8);
 
       for (int c = startCode; c &lt;= endCode; c++) {
         if (from &lt;= c &amp;&amp; (c &lt;= to || to == -1)) {
@@ -7587,11 +7575,11 @@ If the intent is really for a Unicode encodings,
 <code-fragment id='cmap_format12_inv'>
   <code-title>Return character for 'glyphID', using format 12 subtable
   at stOffset</code-title>
-{ int nGroups = (int) getULONG (stOffset + 12);
+{ int nGroups = (int) getuint32 (stOffset + 12);
   for (int i = 0; i &lt; nGroups; i++) {
-    int startCharCode = (int) getULONG (stOffset + 16 + 12*i);
-    int endCharCode = (int) getULONG (stOffset + 16 + 12*i + 4);
-    int startGlyphID = (int) getULONG (stOffset + 16 + 12*i + 8);
+    int startCharCode = (int) getuint32 (stOffset + 16 + 12*i);
+    int endCharCode = (int) getuint32 (stOffset + 16 + 12*i + 4);
+    int startGlyphID = (int) getuint32 (stOffset + 16 + 12*i + 8);
 
     if (   glyphID >= startGlyphID
         &amp;&amp; (glyphID - startGlyphID) &lt;= (endCharCode - startCharCode)) {
@@ -7936,7 +7924,7 @@ If the intent is really for a Unicode encodings,
 
     Block me = new Block (length, nbSelectors * 2);
     me.setuint16 (0, 14);
-    me.setULONG (6, nbSelectors);
+    me.setuint32 (6, nbSelectors);
     int totalLength = length;
 
     for (int i = 0; i &lt; nbSelectors; i++) {
@@ -7954,7 +7942,7 @@ If the intent is really for a Unicode encodings,
         Block defaultUvsBlock = new Block (4 + 4 * nbRanges, 0);
         totalLength += 4 + 4*nbRanges;
         int o = 0;
-        defaultUvsBlock.setULONG (o, nbRanges);
+        defaultUvsBlock.setuint32 (o, nbRanges);
         o += 4;
         for (int r = 0; r &lt; nbRanges; r++) {
           Element range = (Element) ranges.item (r);
@@ -7989,7 +7977,7 @@ If the intent is really for a Unicode encodings,
       else {
         me.setBigOffset (10 + 11*i + 7, null); }}
 
-   me.setULONG (2, totalLength);
+   me.setuint32 (2, totalLength);
    return me;
 }
 </code-fragment>
@@ -8037,7 +8025,7 @@ If the intent is really for a Unicode encodings,
       throws org.xml.sax.SAXException, InvalidFontException {
 
     conf.ch.startElement (element, at); {
-      long nbRanges = getULONG (offset);
+      long nbRanges = getuint32 (offset);
       for (int i = 0; i &lt; nbRanges; i++) {
         int start = getuint24 (offset + 4 + i * 4);
         int additionalCount = getuint8 (offset + 4 + i * 4 + 3);
@@ -8088,7 +8076,7 @@ If the intent is really for a Unicode encodings,
 
 
     conf.ch.startElement (element, at); {
-      long nbMappings = getULONG (offset);
+      long nbMappings = getuint32 (offset);
       for (int i = 0; i &lt; nbMappings; i++) {
         int usv = getuint24 (offset + 4 + i * 5);
         int gid = getuint16 (offset + 4 + i * 5 + 3);
@@ -8105,7 +8093,7 @@ If the intent is really for a Unicode encodings,
 <code-fragment id='cmap.decompile.format14.elt'>
   <code-title>Generate elements for the format 14 cmap subtable at 'stOffset'</code-title>
 
-  long numVarSelectorRecords = getULONG (stOffset + 6);
+  long numVarSelectorRecords = getuint32 (stOffset + 6);
 
   if (true || conf.preciseCmap) {
     for (int i = 0; i &lt; numVarSelectorRecords; i++) {
@@ -8142,7 +8130,7 @@ If the intent is really for a Unicode encodings,
           &amp;&amp; 5 == getuint16 (4 + 8*st + 2)) {
         int stOffset = getLOffset (0, 4 + 8*st + 4);
 
-        long numVarSelectorRecords = getULONG (stOffset + 6);
+        long numVarSelectorRecords = getuint32 (stOffset + 6);
 
         for (int i = 0; i &lt; numVarSelectorRecords; i++) {
           if (variationSelector == getuint24 (stOffset + 10 + 11*i)) {
@@ -8150,7 +8138,7 @@ If the intent is really for a Unicode encodings,
             int dOffset = getLOffset (stOffset, 10 + 11*i + 3);
 
             if (dOffset != 0) {
-              long numUnicodeValueRanges = getULONG (dOffset);
+              long numUnicodeValueRanges = getuint32 (dOffset);
 
               for (int j = 0; j &lt; numUnicodeValueRanges; j++) {
                 int start = getuint24 (dOffset + 4 + 4*j);
@@ -8164,7 +8152,7 @@ If the intent is really for a Unicode encodings,
             int nOffset = getLOffset (stOffset, 10 + 11*i + 7);
 
             if (nOffset != 0) {
-              long numMappings = getULONG (nOffset);
+              long numMappings = getuint32 (nOffset);
 
               for (int j = 0; j &lt; numMappings; j++) {
                 if (charCode == getuint24 (nOffset + 4 + 5*j)) {
@@ -8703,7 +8691,7 @@ head =
         int o = Integer.decode (e.getAttribute ("v")).intValue ();
         setIndexToLocFormat (o); }}
 
-      setULONG (12, 0x5f0f3cf5); // magicNumber
+      setuint32 (12, 0x5f0f3cf5); // magicNumber
 //    setint16 (52, 0); // glyphDataFormat
   }
 </code-fragment>
@@ -8970,11 +8958,11 @@ public class Head extends Table {
   }
 
   public void clearChecksumAdjust () {
-    setULONG (8, 0);
+    setuint32 (8, 0);
   }
 
   public void setChecksumAdjust (long l) {
-    setULONG (8, (int)l);
+    setuint32 (8, (int)l);
   }
 
   public Flags getFlags () {
@@ -17722,10 +17710,10 @@ os2_upperOpticalPointSize =
           if (unicodeRangeNames [r][version] != null) {
 	    if ("yes".equals (e.getAttribute (unicodeRangeNames [r][version]))) {
               range [r / 32] |= (1 &lt;&lt; (r % 32)); }}}
-        me.setULONG (42, range [0]);
-        me.setULONG (46, range [1]);
-        me.setULONG (50, range [2]);
-        me.setULONG (54, range [3]); }
+        me.setuint32 (42, range [0]);
+        me.setuint32 (46, range [1]);
+        me.setuint32 (50, range [2]);
+        me.setuint32 (54, range [3]); }
 
       else if ("vendID".equals (e.getTagName ())) {
         String id = e.getAttribute ("v");
@@ -17767,8 +17755,8 @@ os2_upperOpticalPointSize =
           if (cpNames [r][format] != null) {
             if ("yes".equals (e.getAttribute (cpNames [r][format]))) {
               cp [r / 32] |= (1 &lt;&lt; (r %32)); }}}
-        me.setULONG (78, cp [0]);
-        me.setULONG (82, cp [1]); }
+        me.setuint32 (78, cp [0]);
+        me.setuint32 (82, cp [1]); }
 
       else if ("height".equals (e.getTagName ())) {
         int h = Integer.decode (e.getAttribute ("v")).intValue();
@@ -17893,8 +17881,8 @@ os2_upperOpticalPointSize =
 
       if (version > 0) {
         at = new AttributesImpl ();
-	long[] range = {getULONG (42), getULONG (46),
-                        getULONG (50),  getULONG (54)};
+	long[] range = {getuint32 (42), getuint32 (46),
+                        getuint32 (50),  getuint32 (54)};
         for (int r = 0; r &lt; unicodeRangeNames.length; r++) {
           if (unicodeRangeNames [r][version] != null) {
             at.addAttribute ("", unicodeRangeNames [r][version],
@@ -17903,7 +17891,7 @@ os2_upperOpticalPointSize =
         conf.ch.element ("unicodeRange", at); }
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", Tag.tag2string (getULONG (58)));
+      at.addAttribute ("", "v", "v", "CDATA", Tag.tag2string (getuint32 (58)));
       conf.ch.element ("vendID", at);
 
       at = new AttributesImpl ();
@@ -17935,7 +17923,7 @@ os2_upperOpticalPointSize =
       if (version > 0) {
         at = new AttributesImpl ();
         int format = cpNames_version2format [version];
-        long[] cp = {getULONG (78), getULONG (82)};
+        long[] cp = {getuint32 (78), getuint32 (82)};
         for (int r = 0; r &lt; cpNames.length; r++) {
           if (cpNames [r][format] != null) {
             at.addAttribute ("", cpNames[r][format], cpNames[r][format], "CDATA",
@@ -19062,7 +19050,7 @@ public class OS2 extends Table {
   <code-title>Test ulUnicodeRange support</code-title>
   public boolean unicodeRangeSupported (int i) {
     int offset = 42 + 4 * (i / 32);
-    long range = getULONG (offset);
+    long range = getuint32 (offset);
     return (range &amp; (1 &lt;&lt; (i % 32))) != 0;
   }
 
@@ -19070,7 +19058,7 @@ public class OS2 extends Table {
     if (data.length &lt; 86) {
       return false; }
     int offset = 78 + 4 * (i / 32);
-    long range = getULONG (offset);
+    long range = getuint32 (offset);
     return (range &amp; (1 &lt;&lt; (i % 32))) != 0;
   }
 </code-fragment>
@@ -20483,15 +20471,15 @@ post_common =
         me.setFWord (10, Integer.decode (e.getAttribute ("thickness")).intValue()); }
 
       if ("isFixedPitch".equals (e.getTagName ())) {
-        me.setULONG (12, "yes".equals (e.getAttribute ("v")) ? 1 : 0); }
+        me.setuint32 (12, "yes".equals (e.getAttribute ("v")) ? 1 : 0); }
 
       if ("memType42".equals (e.getTagName ())) {
-        me.setULONG (16, Integer.decode (e.getAttribute ("min")).intValue());
-        me.setULONG (20, Integer.decode (e.getAttribute ("max")).intValue()); }
+        me.setuint32 (16, Integer.decode (e.getAttribute ("min")).intValue());
+        me.setuint32 (20, Integer.decode (e.getAttribute ("max")).intValue()); }
 
       if ("memType1".equals (e.getTagName ())) {
-        me.setULONG (24, Integer.decode (e.getAttribute ("min")).intValue());
-        me.setULONG (28, Integer.decode (e.getAttribute ("max")).intValue()); }
+        me.setuint32 (24, Integer.decode (e.getAttribute ("min")).intValue());
+        me.setuint32 (28, Integer.decode (e.getAttribute ("max")).intValue()); }
 
       if ("glyph".equals (e.getTagName ())) {
         int gid = Integer.decode (e.getAttribute ("id")).intValue ();
@@ -20546,17 +20534,17 @@ post_common =
       conf.ch.element ("underline", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "v", "v", "CDATA", getULONG (12) == 0 ? "no":"yes");
+      at.addAttribute ("", "v", "v", "CDATA", getuint32 (12) == 0 ? "no":"yes");
       conf.ch.element ("isFixedPitch", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "min", "min", "CDATA", "" +  getULONG (16) );
-      at.addAttribute ("", "max", "max", "CDATA", "" +  getULONG (20) );
+      at.addAttribute ("", "min", "min", "CDATA", "" +  getuint32 (16) );
+      at.addAttribute ("", "max", "max", "CDATA", "" +  getuint32 (20) );
       conf.ch.element ("memType42", at);
 
       at = new AttributesImpl ();
-      at.addAttribute ("", "min", "min", "CDATA", "" +  getULONG (24) );
-      at.addAttribute ("", "max", "max", "CDATA", "" +  getULONG (28) );
+      at.addAttribute ("", "min", "min", "CDATA", "" +  getuint32 (24) );
+      at.addAttribute ("", "max", "max", "CDATA", "" +  getuint32 (28) );
       conf.ch.element ("memType1", at);
 
       if (version [0] == 2 &amp;&amp; version [1] == 0) {
@@ -22429,14 +22417,14 @@ public class Loca extends Table {
     if (font.head.getIndexToLocFormat () == 0) {
       return getuint16 (gid * 2) * 2; }
     else {
-      return getULONG (gid * 4); }
+      return getuint32 (gid * 4); }
   }
 
   public void setGlyphLocation (int gid, int offset) {
     if (font.head.getIndexToLocFormat () == 0) {
       setuint16 (gid * 2, offset / 2); }
     else {
-      setULONG (gid * 4, offset); }
+      setuint32 (gid * 4, offset); }
   }
 </code-fragment>
       </section>
@@ -24541,7 +24529,7 @@ public abstract class LookupTable extends LayoutTable {
       for (int i = 0; i &lt; getuint16 (offset); i++) {
 	at = new AttributesImpl ();
 	at.addAttribute ("", "tag", "tag", "CDATA",
-                         Tag.tag2string (getULONG (offset + 2 + 6*i)));
+                         Tag.tag2string (getuint32 (offset + 2 + 6*i)));
 
         scriptTableOffsetToXML (conf, getOffset (offset, 2 + 6*i + 4),
                                 counts, "script", at); }
@@ -24574,7 +24562,7 @@ public abstract class LookupTable extends LayoutTable {
     int scriptCount = getuint16 (scriptListOffset);
 
     for (int scr = 0; scr &lt; scriptCount; scr++) {
-      if (scriptTag == getULONG (scriptListOffset + 2 + 6*scr)) {
+      if (scriptTag == getuint32 (scriptListOffset + 2 + 6*scr)) {
         int scriptOffset
           = getOffset (scriptListOffset, 2 + 6*scr + 4);
         <code-include linkend='method_Table_findLookups3'/>
@@ -24590,7 +24578,7 @@ public abstract class LookupTable extends LayoutTable {
     String[][] result = new String [scriptCount][];
 
     for (int scr = 0; scr &lt; scriptCount; scr++) {
-      long scriptTag = getULONG (scriptListOffset + 2 + 6*scr);
+      long scriptTag = getuint32 (scriptListOffset + 2 + 6*scr);
       int scriptOffset
          = getOffset (scriptListOffset, 2 + 6*scr + 4);
       <code-include linkend='LookupTable_getScriptLangList_2'/> }
@@ -24609,7 +24597,7 @@ public abstract class LookupTable extends LayoutTable {
     long languageTag = Tag.string2tag (language);
 
     for (int scr = 0; scr &lt; scriptCount; scr++) {
-      if (scriptTag == getULONG (scriptListOffset + 2 + 6*scr)) {
+      if (scriptTag == getuint32 (scriptListOffset + 2 + 6*scr)) {
         int scriptOffset
            = getOffset (scriptListOffset, 2 + 6*scr + 4);
         <code-include linkend='LookupTable_getFeatureNames_2'/> }}
@@ -24855,7 +24843,7 @@ public abstract class LookupTable extends LayoutTable {
       for (int i = 0; i &lt; getuint16 (offset + 2); i++) {
         at = new AttributesImpl ();
         at.addAttribute ("", "tag", "tag", "CDATA",
-                         Tag.tag2string (getULONG (offset + 4 + 6*i)));
+                         Tag.tag2string (getuint32 (offset + 4 + 6*i)));
 
         langSysTableOffsetToXML (conf, getOffset (offset, 4 + 6*i + 4),
                                  counts, "langSysRecord", at); }
@@ -24877,7 +24865,7 @@ public abstract class LookupTable extends LayoutTable {
   <code-title>Find LangSys table for 'langSysTag' in Script table at 'scriptOffset'</code-title>
   { int langSysCount = getuint16 (scriptOffset + 2);
     for (int lang = 0; lang &lt; langSysCount; lang++) {
-      if (langSysTag == getULONG (scriptOffset + 4 + 6*lang)) {
+      if (langSysTag == getuint32 (scriptOffset + 4 + 6*lang)) {
         langSysOffset = getOffset (scriptOffset, 4 + 6*lang + 4);
         break; }}
 
@@ -24899,7 +24887,7 @@ public abstract class LookupTable extends LayoutTable {
     result [scr][0] = Tag.tag2string (scriptTag);
 
     for (int lang = 0; lang &lt; langSysCount; lang++) {
-      long langSysTag = getULONG (scriptOffset + 4 + 6*lang);
+      long langSysTag = getuint32 (scriptOffset + 4 + 6*lang);
       result [scr] [lang+1] = Tag.tag2string (langSysTag); }
 
     if (defaultLangSysOffset != 0) {
@@ -24912,7 +24900,7 @@ public abstract class LookupTable extends LayoutTable {
     int defaultLangSysOffset = getOffset (scriptOffset);
 
     for (int lang = 0; lang &lt; langSysCount; lang++) {
-      if (languageTag == getULONG (scriptOffset + 4 + 6*lang)) {
+      if (languageTag == getuint32 (scriptOffset + 4 + 6*lang)) {
         int langSysOffset
           = scriptOffset + getOffset (scriptOffset + 4 + 6*lang + 4);
         return getFeatureNamesForLang (langSysOffset); }}
@@ -25429,7 +25417,7 @@ public abstract class LookupTable extends LayoutTable {
         at.addAttribute ("", "id", "id", "CDATA",
                          "feature_" + i);
         at.addAttribute ("", "tag", "tag", "CDATA",
-                         Tag.tag2string (getULONG (offset + 2 + 6*i)));
+                         Tag.tag2string (getuint32 (offset + 2 + 6*i)));
 
         featureTableOffsetToXML (conf, getOffset (offset, 2 + 6*i + 4),
                                  counts, "feature", at); }
@@ -25457,7 +25445,7 @@ public abstract class LookupTable extends LayoutTable {
 
 <code-fragment id='method_Table_findLookups6'>
   <code-title>Include 'featureIndex' if its tag is in 'selectedFeatureTags'</code-title>
-  { long featureTag = getULONG (featureListOffset + 2 + 6*featureIndex);
+  { long featureTag = getuint32 (featureListOffset + 2 + 6*featureIndex);
     for (int i = 0; i &lt; selectedFeatureTags.length; i++) {
       if (selectedFeatureTags [i] == featureTag) {
         selectedFeatureIndices [selectedFeatureIndicesCount++] = featureIndex; }}}
@@ -25465,7 +25453,7 @@ public abstract class LookupTable extends LayoutTable {
 
 <code-fragment id='LookupTable_getFeatureNamesForLang_2'>
   <code-title>ddd</code-title>
-  { long featureTag = getULONG (featureListOffset + 2 + 6*featureIndex);
+  { long featureTag = getuint32 (featureListOffset + 2 + 6*featureIndex);
     result [f] = Tag.tag2string (featureTag); }
 </code-fragment>
 
@@ -31028,7 +31016,7 @@ public class Base extends LayoutTable {
       for (int i = 0; i &lt; getuint16 (offset); i++) {
         at = new AttributesImpl ();
         at.addAttribute ("", "v", "v", "CDATA",
-                         Tag.tag2string (getULONG (offset + 2 + 4*i)));
+                         Tag.tag2string (getuint32 (offset + 2 + 4*i)));
         conf.ch.element ("tag", at); }
       conf.ch.endElement (element); }
   }
@@ -31219,7 +31207,7 @@ public class Base extends LayoutTable {
       for (int i = 0; i &lt; getuint16 (offset); i++) {
         at = new AttributesImpl ();
 	at.addAttribute ("", "tag", "tag", "CDATA",
-                         Tag.tag2string (getULONG (offset + 2 + 6*i)));
+                         Tag.tag2string (getuint32 (offset + 2 + 6*i)));
         baseScriptTableOffsetToXML (conf, getOffset (offset, 2 + 6*i + 4),
                                counts, "baseScriptRecord", at); }
       conf.ch.endElement (element); }
@@ -31518,7 +31506,7 @@ public class Base extends LayoutTable {
       for (int i = 0; i &lt; getuint16 (offset + 4); i++) {
         at = new AttributesImpl ();
         at.addAttribute ("", "tag", "tag", "CDATA",
-                         Tag.tag2string (getULONG (offset + 6 + 6*i)));
+                         Tag.tag2string (getuint32 (offset + 6 + 6*i)));
         minMaxTableOffsetToXML (conf, getOffset (offset, 6 + 6*i + 4),
                                 counts, "baseLangSysRecord", at); }
 
@@ -32085,7 +32073,7 @@ public class Base extends LayoutTable {
 
           at = new AttributesImpl ();
           at.addAttribute ("", "v", "v", "CDATA",
-                           Tag.tag2string (getULONG (offset + 6 + 8*i)));
+                           Tag.tag2string (getuint32 (offset + 6 + 8*i)));
           conf.ch.element ("tag", at);
 
           if (getOffset (offset + 6 + 8*i + 4) != 0) {
@@ -57130,7 +57118,7 @@ Lookahead sequence -                   0  1  2  3
 <code-fragment id='lookuptable.methods'>
   public void extensionLookupToXMLCount (int stOffset, int[] counts) {
     int targetType = getuint16 (stOffset + 2);
-    int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
+    int extensionOffset = stOffset + (int) getuint32 (stOffset + 4);
 
     lookupSubtableToXMLCount (extensionOffset, counts, targetType);
 
@@ -57143,7 +57131,7 @@ Lookahead sequence -                   0  1  2  3
       throws org.xml.sax.SAXException, InvalidFontException {
 
     int targetType = getuint16 (stOffset + 2);
-    int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
+    int extensionOffset = stOffset + (int) getuint32 (stOffset + 4);
 
     lookupSubtableToXML (conf, extensionOffset, counts, targetType);
   }
@@ -57153,7 +57141,7 @@ Lookahead sequence -                   0  1  2  3
       throws org.xml.sax.SAXException, InvalidFontException {
 
     int targetType = getuint16 (stOffset + 2);
-    int extensionOffset = stOffset + (int) getULONG (stOffset + 4);
+    int extensionOffset = stOffset + (int) getuint32 (stOffset + 4);
 
     AttributesImpl at = new AttributesImpl ();
 
@@ -57179,7 +57167,7 @@ Lookahead sequence -                   0  1  2  3
       throws InvalidFontException {
 
     int extensionLookupType = getuint16 (stOffset + 2);
-    int extensionOffset = stOffset + (int)getULONG (stOffset + 4);
+    int extensionOffset = stOffset + (int)getuint32 (stOffset + 4);
 
     return applyLookupSubtable (lookupIndex, extensionLookupType,
                                 lookupFlag, extensionOffset, gr,
@@ -62774,18 +62762,18 @@ Lookahead sequence -                   0  1  2  3
       throws org.xml.sax.SAXException {
 
     AttributesImpl at = new AttributesImpl ();
-    at.addAttribute ("", "version", "version", "CDATA", "" + getULONG (0));
+    at.addAttribute ("", "version", "version", "CDATA", "" + getuint32 (0));
     at.addAttribute ("", "flags", "flags", "CDATA", "" + getuint16 (6));
 
     conf.ch.startElement ("DSIG", at); {
       for (int i = 0; i &lt; getuint16 (4); i++) {
         at = new AttributesImpl ();
         at.addAttribute ("", "format", "format", "CDATA",
-                         "" + getULONG (8 + 12*i));
+                         "" + getuint32 (8 + 12*i));
         conf.ch.startElement ("signature", at); {
-          int offset = (int)getULONG (8 + 12*i + 8);
+          int offset = (int)getuint32 (8 + 12*i + 8);
           conf.ch.characters (toXML (offset,
-                              (int)getULONG (8 + 12*i + 4)));
+                              (int)getuint32 (8 + 12*i + 4)));
           conf.ch.endElement ("signature"); }}
       conf.ch.endElement ("DSIG"); }
   }
@@ -63327,7 +63315,7 @@ hdmx =
     me.setuint16 (offset,
                   Integer.decode (hdmx.getAttribute ("version")).intValue ());
     me.setint16 (offset + 2, numRecords);
-    me.setLONG (offset + 4, sizeDeviceRecord);
+    me.setint32 (offset + 4, sizeDeviceRecord);
 
     offset += 8;
 
@@ -63369,7 +63357,7 @@ hdmx =
       int numGlyphs = font.maxp.getNumGlyphs ();
 
       int numRecords = getint16 (2);
-      int sizeDeviceRecord = getLONG (4);
+      int sizeDeviceRecord = getint32 (4);
 
       offset = 8;
 
@@ -82865,10 +82853,10 @@ public class Font {
 
       fileChecksum = (fileChecksum + tableChecksum) &amp; 0xffffffffL;
 
-      header.setULONG (headerOffset,      (int)t.getTag ());
-      header.setULONG (headerOffset + 4,  (int)tableChecksum);
-      header.setULONG (headerOffset + 8,  (int)offset);
-      header.setULONG (headerOffset + 12, data.length);
+      header.setuint32 (headerOffset,      (int)t.getTag ());
+      header.setuint32 (headerOffset + 4,  (int)tableChecksum);
+      header.setuint32 (headerOffset + 8,  (int)offset);
+      header.setuint32 (headerOffset + 12, data.length);
       headerOffset += 16;
 
       offset += data.length;
