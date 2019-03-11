@@ -22144,7 +22144,7 @@ component_scale |=
 
         int flags = getUSHORT (offset);
         at.addAttribute ("", "flags", "flags", "CDATA",
-                         "0x" + Integer.toHexString (flags &amp; 0x1e04));
+                         "0x" + Integer.toHexString (flags &amp; 0x1e06));
         offset += 2;
 
         we_have_instructions |= ((flags &amp; WE_HAVE_INSTRUCTIONS) != 0);
