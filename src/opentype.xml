@@ -22449,11 +22449,15 @@ component_scale |=
 
   public MaxpValues getMaxpValues (int gid) {
     MaxpValues maxpValues = new MaxpValues ();
-    maxpValues.numComponentElements = 0;
     maxpValues.numPoints = 0;
     maxpValues.numCompositePoints = 0;
     maxpValues.numContours = 0;
     maxpValues.numCompositeContours = 0;
+    maxpValues.numComponentElements = 0;
+    maxpValues.componentDepth = 0;
+
+    if (isEmpty (gid)) {
+      return maxpValues; }
 
     int offset = (int) font.loca.getGlyphLocation (gid);
 
@@ -22461,42 +22465,43 @@ component_scale |=
       maxpValues.componentDepth = 0;
       maxpValues.numContours = getuint16 (offset);
       maxpValues.numPoints = getuint16 (offset + 10 + (maxpValues.numContours-1) * 2) + 1;
-
       maxpValues.numCompositeContours = maxpValues.numContours;
-      maxpValues.numCompositePoints = maxpValues.numPoints; }
+      maxpValues.numCompositePoints = maxpValues.numPoints;
 
-    else {
-      maxpValues.componentDepth = 0;
+      return maxpValues; }
 
-      offset += 10;
 
-      while (true) {
-        int flags = getuint16 (offset);
-        MaxpValues maxpValues2 = getMaxpValues (getuint16 (offset + 2));
+    maxpValues.componentDepth = 0;
 
-        maxpValues.numCompositePoints += maxpValues2.numCompositePoints;
-        maxpValues.numCompositeContours += maxpValues2.numCompositeContours;
+    offset += 10;
 
-        maxpValues.componentDepth = Math.max (maxpValues.componentDepth,
-                                       1 + maxpValues2.componentDepth);
+    while (true) {
+      int flags = getuint16 (offset);
+      MaxpValues maxpValues2 = getMaxpValues (getuint16 (offset + 2));
 
-        maxpValues.numComponentElements += 1;
+      maxpValues.numCompositePoints += maxpValues2.numCompositePoints;
+      maxpValues.numCompositeContours += maxpValues2.numCompositeContours;
 
-        offset += 4;
-        if ((flags &amp; ARG_1_AND_2_ARE_WORDS) != 0) {
-          offset += 4; }
-        else {
-          offset += 2; }
+      maxpValues.componentDepth = Math.max (maxpValues.componentDepth,
+                                     1 + maxpValues2.componentDepth);
 
-        if ((flags &amp; WE_HAVE_A_SCALE) != 0) {
-          offset += 2; }
-        else if ((flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
-          offset += 4; }
-        else if ((flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
-          offset += 8; }
+      maxpValues.numComponentElements += 1;
 
-        if ((flags &amp; MORE_COMPONENTS) == 0) {
-          break; }}}
+      offset += 4;
+      if ((flags &amp; ARG_1_AND_2_ARE_WORDS) != 0) {
+        offset += 4; }
+      else {
+        offset += 2; }
+
+      if ((flags &amp; WE_HAVE_A_SCALE) != 0) {
+        offset += 2; }
+      else if ((flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+        offset += 4; }
+      else if ((flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
+        offset += 8; }
+
+      if ((flags &amp; MORE_COMPONENTS) == 0) {
+        break; }}
 
     return maxpValues;
   }
