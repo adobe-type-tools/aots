@@ -22328,92 +22328,57 @@ component_scale |=
   public void compositeGlyphToXML (DecompilerConfig conf, int offset)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-      boolean we_have_instructions = false;
+    CompositeGlyphUnpack u = unpackCompositeGlyph (offset);
 
-      while (true) {
-        AttributesImpl at = new AttributesImpl ();
+    for (CompositeGlyphComponent c : u.components) {
+      AttributesImpl at = new AttributesImpl ();
 
-        int flags = getuint16 (offset);
-        at.addAttribute ("", "flags", "flags", "CDATA",
-                         "0x" + Integer.toHexString (flags &amp; 0x1e06));
-        offset += 2;
+      at.addAttribute ("", "flags", "flags", "CDATA",
+                       "0x" + Integer.toHexString (c.flags &amp; 0x1e06));
 
-        we_have_instructions |= ((flags &amp; WE_HAVE_INSTRUCTIONS) != 0);
+      at.addAttribute ("", "gid", "gid", "CDATA",
+                       Integer.toString (c.gid));
 
-        int gid = getGlyphID (offset);
-        at.addAttribute ("", "gid", "gid", "CDATA",
-                         Integer.toString (gid));
-        offset += 2;
+      at.addAttribute ("", "arg1", "arg1", "CDATA",
+                       Integer.toString (c.arg1));
+      at.addAttribute ("", "arg2", "arg2", "CDATA",
+                       Integer.toString (c.arg2));
 
-        int arg1, arg2;
-        if ((flags &amp; ARG_1_AND_2_ARE_WORDS) != 0) {
-          if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
-            arg1 = getint16 (offset); offset += 2;
-            arg2 = getint16 (offset); offset += 2; }
-          else {
-            arg1 = getuint16 (offset); offset += 2;
-            arg2 = getuint16 (offset); offset += 2; }}
-        else {
-          if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
-            arg1 = getint8 (offset); offset += 1;
-            arg2 = getint8 (offset); offset += 1; }
-          else {
-            arg1 = getuint8 (offset); offset += 1;
-            arg2 = getuint8 (offset); offset += 1; }}
+      if ((c.flags &amp; WE_HAVE_A_SCALE) != 0) {
+        at.addAttribute ("", "scale", "scale", "CDATA",
+                         Integer.toString (c.xscale)); }
 
-        at.addAttribute ("", "arg1", "arg1", "CDATA",
-                         Integer.toString (arg1));
-        at.addAttribute ("", "arg2", "arg2", "CDATA",
-                         Integer.toString (arg2));
-
-        if ((flags &amp; WE_HAVE_A_SCALE) != 0) {
-          int scale = getFWord (offset); offset += 2;
-          at.addAttribute ("", "scale", "scale", "CDATA",
-                           Integer.toString (scale)); }
-
-        else if ((flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
-          int xscale = getFWord (offset); offset += 2;
-          int yscale = getFWord (offset); offset += 2;
-          at.addAttribute ("", "xscale", "xscale", "CDATA",
-                           Integer.toString (xscale));
-          at.addAttribute ("", "yscale", "yscale", "CDATA",
-                           Integer.toString (yscale)); }
+      else if ((c.flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+        at.addAttribute ("", "xscale", "xscale", "CDATA",
+                         Integer.toString (c.xscale));
+        at.addAttribute ("", "yscale", "yscale", "CDATA",
+                         Integer.toString (c.yscale)); }
 
 
-        else if ((flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
-          int xscale = getFWord (offset); offset += 2;
-          int scale01 = getFWord (offset); offset += 2;
-          int scale10 = getFWord (offset); offset += 2;
-          int yscale = getFWord (offset); offset += 2;
+      else if ((c.flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
+        at.addAttribute ("", "xscale", "xscale", "CDATA",
+                         Integer.toString (c.xscale));
+        at.addAttribute ("", "scale01", "scale01", "CDATA",
+                         Integer.toString (c.scale01));
+        at.addAttribute ("", "scale10", "scale10", "CDATA",
+                         Integer.toString (c.scale10));
+        at.addAttribute ("", "yscale", "yscale", "CDATA",
+                         Integer.toString (c.yscale)); }
 
-          at.addAttribute ("", "xscale", "xscale", "CDATA",
-                           Integer.toString (xscale));
-          at.addAttribute ("", "scale01", "scale01", "CDATA",
-                           Integer.toString (scale01));
-          at.addAttribute ("", "scale10", "scale10", "CDATA",
-                           Integer.toString (scale10));
-          at.addAttribute ("", "yscale", "yscale", "CDATA",
-                           Integer.toString (yscale)); }
+      conf.ch.element ("component", at); }
 
-        conf.ch.element ("component", at);
+    if (u.instructions != null) {
+      String opcodes = "";
+      String prefix = "";
+      for (int i = 0; i &lt; u.instructions.length; i++) {
+        opcodes += prefix + "0x" + Integer.toString (u.instructions [i]);
+        prefix = " "; }
 
-        if ((flags &amp; MORE_COMPONENTS) == 0) {
-          break; }}
+      AttributesImpl at = new AttributesImpl ();
+      at.addAttribute ("", "opcodes", "opcodes", "CDATA",
+                       opcodes);
 
-      if (we_have_instructions) {
-        int numInstr = getuint16 (offset); offset += 2;
-        String opcodes = "";
-        String prefix = "";
-        for (int i = 0; i &lt; numInstr; i++) {
-          opcodes += prefix + "0x" + Integer.toString (getuint8 (offset));
-          offset += 1;
-          prefix = " "; }
-
-        AttributesImpl at = new AttributesImpl ();
-        at.addAttribute ("", "opcodes", "opcodes", "CDATA",
-                         opcodes);
-
-        conf.ch.element ("instructions", at); }
+      conf.ch.element ("instructions", at); }
   }
 </code-fragment>
       </section>
@@ -22436,8 +22401,101 @@ component_scale |=
   public static final int OVERLAP_COMPOUND           = 0x0400;
   public static final int SCALED_COMPONENT_OFFSET    = 0x0800;
   public static final int UNSCALED_COMPONENT_OFFSET  = 0x1000;
+</code-fragment>
+
+<code-fragment id='glyf.methods'>
+  public class CompositeGlyphComponent {
+    int flags;
+    int gid;
+    int arg1, arg2;
+
+    int xscale = 1 &lt;&lt; 14;
+    int yscale = 1 &lt;&lt; 14;
+    int scale01 = 0;
+    int scale10 = 0;
+  }
+
+  public class CompositeGlyphUnpack {
+    int offset;
+    java.util.Vector&lt;CompositeGlyphComponent> components;
+    int[] instructions;
+
+    public CompositeGlyphUnpack ()
+    {
+      this.components = new java.util.Vector&lt;CompositeGlyphComponent> ();
+      this.instructions = null;
+    }
+  }
 
 
+  public CompositeGlyphUnpack unpackCompositeGlyph (int offset) {
+
+    CompositeGlyphUnpack u = new CompositeGlyphUnpack ();
+
+    boolean we_have_instructions = false;
+
+    while (true) {
+      CompositeGlyphComponent c = new CompositeGlyphComponent ();
+
+      int flags = getuint16 (offset);
+      offset += 2;
+
+      c.flags = flags;  // remove ARG1, scale, instr
+
+      we_have_instructions |= ((flags &amp; WE_HAVE_INSTRUCTIONS) != 0);
+
+      c.gid = getGlyphID (offset);
+      offset += 2;
+
+      if ((flags &amp; ARG_1_AND_2_ARE_WORDS) != 0) {
+        if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
+          c.arg1 = getint16 (offset); offset += 2;
+          c.arg2 = getint16 (offset); offset += 2; }
+        else {
+          c.arg1 = getuint16 (offset); offset += 2;
+          c.arg2 = getuint16 (offset); offset += 2; }}
+      else {
+        if ((flags &amp; ARGS_ARE_XY_VALUES) != 0) {
+          c.arg1 = getint8 (offset); offset += 1;
+          c.arg2 = getint8 (offset); offset += 1; }
+        else {
+          c.arg1 = getuint8 (offset); offset += 1;
+          c.arg2 = getuint8 (offset); offset += 1; }}
+
+      if ((flags &amp; WE_HAVE_A_SCALE) != 0) {
+        c.xscale = c.yscale = getFWord (offset); offset += 2; }
+
+      else if ((flags &amp; WE_HAVE_AN_X_AND_Y_SCALE) != 0) {
+        c.xscale = getFWord (offset); offset += 2;
+        c.yscale = getFWord (offset); offset += 2; }
+
+      else if ((flags &amp; WE_HAVE_A_TWO_BY_TWO) != 0) {
+        c.xscale = getFWord (offset); offset += 2;
+        c.scale01 = getFWord (offset); offset += 2;
+        c.scale10 = getFWord (offset); offset += 2;
+        c.yscale = getFWord (offset); offset += 2; }
+
+      u.components.add (c);
+
+      if ((flags &amp; MORE_COMPONENTS) == 0) {
+        break; }}
+
+    if (we_have_instructions) {
+      int numInstr = getuint16 (offset); offset += 2;
+      u.instructions = new int [numInstr];
+      for (int i = 0; i &lt; numInstr; i++) {
+        u.instructions [i] = getuint8 (offset);
+        offset += 1; }}
+
+    u.offset = offset;
+
+    return u;
+  }
+</code-fragment>
+
+<para>This method computes some of the 'maxp' values from the glyphs.</para>
+
+<code-fragment id='glyf.methods'>
   static public class MaxpValues {
     int numPoints;
     int numCompositePoints;
