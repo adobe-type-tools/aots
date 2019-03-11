@@ -21643,87 +21643,36 @@ simple_glyph =
         <title>Decompiler</title>
 
 <code-fragment id='glyf.methods'>
+  <code-title>Decompiler for simple glyphs</code-title>
+
   public void simpleGlyphToXML (DecompilerConfig conf,
                                 int offset,
                                 int nbContours)
       throws org.xml.sax.SAXException, InvalidFontException {
 
-      int endPts[] = new int [nbContours];
-      for (int i = 0; i &lt; nbContours; i++) {
-        endPts [i] = getuint16 (offset); offset += 2; }
+      SimpleGlyphUnpack u = unpackSimpleGlyphContours (offset, nbContours);
 
-      int nbPts = endPts [nbContours - 1] + 1;
+      offset += 2 * nbContours;  // skip to the instructions
 
-      int numInstr = getUSHORT (offset); offset += 2;
+      int numInstr = getuint16 (offset); offset += 2;
       String opcodes = "";
       String prefix = "";
       for (int i = 0; i &lt; numInstr; i++) {
-        opcodes += prefix + "0x" + Integer.toHexString (getBYTE (offset));
+        opcodes += prefix + "0x" + Integer.toHexString (getuint8 (offset));
         offset += 1;
         prefix = " "; }
-
-      int flags[] = new int [nbPts];
-      int repeat = 0;
-      int f = 0;
-
-      for (int i = 0; i &lt; nbPts; i++) {
-        if (repeat == 0) {
-          f = getuint8 (offset); offset++;
-          repeat = 0;
-          if ((f &amp; REPEAT_FLAG) != 0) {
-            repeat = getuint8 (offset); offset++; }}
-        else {
-          repeat--; }
-        flags [i] = f; }
-
-      int x [] = new int [nbPts];
-      int current_x = 0;
-
-      for (int i = 0; i &lt; nbPts; i++) {
-        if ((flags [i] &amp; X_SHORT_VECTOR) != 0) {
-          int xOffset = getuint8 (offset); offset += 1;
-          if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) == 0) {
-            xOffset = - xOffset; }
-          current_x += xOffset; }
-
-        else if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) != 0) {
-          /* same */ }
-
-        else {
-          current_x += getint16 (offset); offset += 2; }
-
-        x [i] = current_x; }
-
-      int y [] = new int [nbPts];
-      int current_y = 0;
-
-      for (int i = 0; i &lt; nbPts; i++) {
-        if ((flags [i] &amp; Y_SHORT_VECTOR) != 0) {
-          int yOffset = getuint8 (offset); offset += 1;
-          if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) == 0) {
-            yOffset = - yOffset; }
-          current_y += yOffset; }
-
-        else if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) != 0) {
-          /* same */ }
-
-        else {
-          current_y += getint16 (offset); offset += 2; }
-
-        y [i] = current_y; }
 
       int pt = 0;
       for (int c = 0; c &lt; nbContours; c++) {
         conf.ch.startElement ("contour");
 
-        while (pt &lt;= endPts [c]) {
+        while (pt &lt;= u.endPts [c]) {
 
           AttributesImpl at = new AttributesImpl ();
           at.addAttribute ("", "on_curve", "on_curve", "CDATA",
-                           (flags [pt] &amp; ON_CURVE_POINT) != 0
-                           ? "yes" : "no");
-          at.addAttribute ("", "x", "x", "CDATA", Integer.toString (x [pt]));
-          at.addAttribute ("", "y", "y", "CDATA", Integer.toString (y [pt]));
+                           u.on [pt] ? "yes" : "no");
+          at.addAttribute ("", "x", "x", "CDATA", Integer.toString (u.x [pt]));
+          at.addAttribute ("", "y", "y", "CDATA", Integer.toString (u.y [pt]));
 
           conf.ch.element ("point", at);
           pt++; }
@@ -21750,6 +21699,90 @@ simple_glyph =
   public static final int REPEAT_FLAG                          = 0x0008;
   public static final int X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR = 0x0010;
   public static final int Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR = 0x0020;
+</code-fragment>
+
+
+<para>This method unpacks the fields of a simple glyph, so that we have the list of coordinates readily available.</para>
+
+
+<code-fragment id='glyf.methods'>
+
+  public class SimpleGlyphUnpack {
+    int offset;
+    int endPts [];
+    int nbPts;
+    int x[];
+    int y[];
+    boolean on[];
+  }
+
+  public SimpleGlyphUnpack unpackSimpleGlyphContours (int offset,
+                                                      int nbContours) {
+
+    SimpleGlyphUnpack u = new SimpleGlyphUnpack ();
+
+    u.endPts = new int [nbContours];
+    for (int i = 0; i &lt; nbContours; i++) {
+      u.endPts [i] = getuint16 (offset); offset += 2; }
+
+    offset += 2 + getuint16 (offset);  // instructionLength
+
+    u.nbPts = u.endPts [nbContours - 1] + 1;
+    u.x = new int [u.nbPts];
+    u.y = new int [u.nbPts];
+    u.on = new boolean [u.nbPts];
+
+    int flags[] = new int [u.nbPts];
+    int repeat = 0;
+    int f = 0;
+
+    for (int i = 0; i &lt; u.nbPts; i++) {
+      if (repeat == 0) {
+        f = getuint8 (offset); offset++;
+        repeat = 0;
+        if ((f &amp; REPEAT_FLAG) != 0) {
+          repeat = getuint8 (offset); offset++; }}
+      else {
+        repeat--; }
+      flags [i] = f;
+      u.on [i] = ((f &amp; ON_CURVE_POINT) != 0);  }
+
+    int current_x = 0;
+
+    for (int i = 0; i &lt; u.nbPts; i++) {
+      if ((flags [i] &amp; X_SHORT_VECTOR) != 0) {
+        int xOffset = getuint8 (offset); offset += 1;
+        if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) == 0) {
+          xOffset = - xOffset; }
+        current_x += xOffset; }
+
+      else if ((flags [i] &amp; X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR) != 0) {
+        /* same */ }
+
+      else {
+        current_x += getint16 (offset); offset += 2; }
+
+      u.x [i] = current_x; }
+
+    int current_y = 0;
+
+    for (int i = 0; i &lt; u.nbPts; i++) {
+      if ((flags [i] &amp; Y_SHORT_VECTOR) != 0) {
+        int yOffset = getuint8 (offset); offset += 1;
+        if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) == 0) {
+          yOffset = - yOffset; }
+        current_y += yOffset; }
+
+      else if ((flags [i] &amp; Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR) != 0) {
+        /* same */ }
+
+      else {
+        current_y += getint16 (offset); offset += 2; }
+
+      u.y [i] = current_y; }
+
+    return u;
+  }
 </code-fragment>
       </section>
     </section>
