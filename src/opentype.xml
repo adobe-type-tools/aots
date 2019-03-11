@@ -534,12 +534,12 @@ import java.util.Vector;
       setuint32 (offset, 0x1234567);
     }
 
-    public void setByte (int offset, int value) {
+    public void setuint8 (int offset, int value) {
       content [offset] = (byte) value;
     }
 
-    public void setBYTE (int offset, int value) {
-      setByte (offset, value);
+    public void setint8 (int offset, int value) {
+      content [offset] = (byte) value;
     }
 
     public void setuint16 (int offset, int value) {
@@ -591,10 +591,10 @@ import java.util.Vector;
 
     public void setTag (int offset, String tag) {
       String t = tag + "    ";
-      setByte (offset+0, t.charAt (0));
-      setByte (offset+1, t.charAt (1));
-      setByte (offset+2, t.charAt (2));
-      setByte (offset+3, t.charAt (3));
+      setuint8 (offset+0, t.charAt (0));
+      setuint8 (offset+1, t.charAt (1));
+      setuint8 (offset+2, t.charAt (2));
+      setuint8 (offset+3, t.charAt (3));
     }
 
     public void setLONGDATETIME (int offset, long date) {
@@ -1269,20 +1269,24 @@ public class Decompiler {
 
 <code-fragment id='table.methods'>
   <code-title>Data Access routines</code-title>
-  protected final int getBYTE (int offset) {
+  protected final int getuint8 (int offset) {
     int x = data [offset];
     if (x &lt; 0) {
       x += 256; }
     return x;
   }
 
-  protected final void setBYTE (int offset, int v) {
+  protected final int getint8 (int offset) {
+    return data [offset];
+  }
+
+  protected final void setuint8 (int offset, int v) {
     data [offset] = (byte) (v &amp; 0xff);
   }
 
   protected final int getUSHORT (int offset) {
-    int b1 = ((int)(getBYTE (offset    ))) &lt;&lt;  8;
-    int b2 = ((int)(getBYTE (offset + 1)));
+    int b1 = ((int)(getuint8 (offset    ))) &lt;&lt;  8;
+    int b2 = ((int)(getuint8 (offset + 1)));
     return (b1 | b2);
   }
 
@@ -1291,22 +1295,14 @@ public class Decompiler {
     data [offset+1] = (byte) ((v     ) &amp; 0xff);
   }
 
-  protected final int getint8 (int offset) {
-    return getBYTE (offset);
-  }
-
-  protected final int getuint8 (int offset) {
-    return getBYTE (offset);
-  }
-
   protected final int getuint16 (int offset) {
     return getUSHORT (offset);
   }
 
   protected final int getuint24 (int offset) {
-    int b1 = ((int)(getBYTE (offset    ))) &lt;&lt; 16;
-    int b2 = ((int)(getBYTE (offset + 1))) &lt;&lt;  8;
-    int b3 = ((int)(getBYTE (offset + 2)));
+    int b1 = ((int)(getuint8 (offset    ))) &lt;&lt; 16;
+    int b2 = ((int)(getuint8 (offset + 1))) &lt;&lt;  8;
+    int b3 = ((int)(getuint8 (offset + 2)));
     return (b1 | b2 | b3);
   }
 
@@ -1316,7 +1312,7 @@ public class Decompiler {
 
   protected final int getSHORT (int offset) {
     int x = ((int)data [offset]) * 256;
-    return x + getBYTE (offset + 1);
+    return x + getuint8 (offset + 1);
   }
 
   protected final void setSHORT (int offset, int v) {
@@ -1339,10 +1335,10 @@ public class Decompiler {
   }
 
   protected final long getULONG (int offset) {
-    long b1 = ((long)(getBYTE (offset    ))) &lt;&lt; 24;
-    long b2 = ((long)(getBYTE (offset + 1))) &lt;&lt; 16;
-    long b3 = ((long)(getBYTE (offset + 2))) &lt;&lt;  8;
-    long b4 = ((long)(getBYTE (offset + 3)));
+    long b1 = ((long)(getuint8 (offset    ))) &lt;&lt; 24;
+    long b2 = ((long)(getuint8 (offset + 1))) &lt;&lt; 16;
+    long b3 = ((long)(getuint8 (offset + 2))) &lt;&lt;  8;
+    long b4 = ((long)(getuint8 (offset + 3)));
     return (b1 | b2 | b3 | b4);
   }
 
@@ -1352,9 +1348,9 @@ public class Decompiler {
 
   protected final int getint32 (int offset) {
     int x = ((int)data [offset]) * 256;
-    x = (x + getBYTE (offset + 1)) * 256;
-    x = (x + getBYTE (offset + 2)) * 256;
-    return x + getBYTE (offset + 3);
+    x = (x + getuint8 (offset + 1)) * 256;
+    x = (x + getuint8 (offset + 2)) * 256;
+    return x + getuint8 (offset + 3);
   }
 
   protected final int getLONG (int offset) {
@@ -4451,7 +4447,7 @@ static public Index WinUnicode10 = new Index (3, 10);
     b.setUSHORT (4, language);
     int offset = 6;
     for (int i = 0; i &lt;= 255; i++) {
-      b.setBYTE (offset, m[i]);
+      b.setuint8 (offset, m[i]);
       offset += 1; }
 
     return b;
@@ -4466,12 +4462,12 @@ static public Index WinUnicode10 = new Index (3, 10);
 <code-fragment id='cmap.decompile.format0.elt'>
   <code-title>Generate elements for the format 0 cmap subtable at 'stOffset'</code-title>
   for (int i = 0; i &lt; 256; i++) {
-    if (conf.preciseCmap || getBYTE (stOffset + 6 + i) != 0) {
+    if (conf.preciseCmap || getuint8 (stOffset + 6 + i) != 0) {
       at = new AttributesImpl ();
       at.addAttribute ("", "code", "code", "CDATA",
                        "0x" + Integer.toHexString (i));
       at.addAttribute ("", "glyph", "glyph", "CDATA",
-                       "" + getBYTE (stOffset + 6 + i));
+                       "" + getuint8 (stOffset + 6 + i));
       conf.ch.element ("map", at); }}
 
 </code-fragment>
@@ -4485,7 +4481,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   <code-title>Return glyph for 'charCode', using format 0 subtable at 'stOffset'</code-title>
   { int size = getUSHORT (stOffset + 2) - 6;
     if (0 &lt;= charCode &amp;&amp; charCode &lt; size) {
-      return getBYTE (stOffset + 6 + charCode); }
+      return getuint8 (stOffset + 6 + charCode); }
     else {
       return 0; }}
 </code-fragment>
@@ -4498,7 +4494,7 @@ static public Index WinUnicode10 = new Index (3, 10);
     int size = getUSHORT (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
       if (from &lt;= i &amp;&amp; (i &lt;= to || to == -1)) {
-        m.put (i, getBYTE (stOffset + 6 + i)); }}
+        m.put (i, getuint8 (stOffset + 6 + i)); }}
 
     return m; }
 </code-fragment>
@@ -4507,7 +4503,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   <code-title>Return character for 'glyphID', using format 0 subtable at 'stOffset'</code-title>
   { int size = getUSHORT (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
-      if (getBYTE (stOffset + 6 + i) == glyphID) {
+      if (getuint8 (stOffset + 6 + i) == glyphID) {
         return i; }}
     return -1; }
 </code-fragment>
@@ -4516,7 +4512,7 @@ static public Index WinUnicode10 = new Index (3, 10);
   <code-title>Fill 'v' with characters for 'glyphID', using format 0 subtable at 'stOffset'</code-title>
   { int size = getUSHORT (stOffset + 2) - 6;
     for (int i = 0; i &lt; size; i++) {
-      if (getBYTE (stOffset + 6 + i) == glyphID) {
+      if (getuint8 (stOffset + 6 + i) == glyphID) {
         v.add (new Integer (i)); }}}
 </code-fragment>
 
@@ -7985,7 +7981,7 @@ If the intent is really for a Unicode encodings,
           defaultUvsBlock.setuint24 (o,
             Integer.decode (range.getAttribute ("start")).intValue ());
           o += 3;
-          defaultUvsBlock.setBYTE (o,
+          defaultUvsBlock.setuint8 (o,
             Integer.decode (range.getAttribute ("additionalCount")).intValue ());
           o += 1; }
         me.setBigOffset (10 + 11*i + 3, defaultUvsBlock);
@@ -8178,7 +8174,7 @@ If the intent is really for a Unicode encodings,
 
               for (int j = 0; j &lt; numUnicodeValueRanges; j++) {
                 int start = getuint24 (dOffset + 4 + 4*j);
-                int additionalCount = getBYTE (dOffset + 4 + 4*j + 3);
+                int additionalCount = getuint8 (dOffset + 4 + 4*j + 3);
 
                 if (   start &lt;= charCode
                     &amp;&amp; charCode &lt;= start + additionalCount) {
@@ -12482,7 +12478,7 @@ public class Name extends Table {
     for (int i = 0; i &lt; nbRecords; i++) {
       Entry e = entries.get (i);
       for (int j = 0; j &lt; e.s.length; j++) {
-        b.setBYTE (offset++, e.s[j]); }}
+        b.setuint8 (offset++, e.s[j]); }}
 
     data = b.serialize ();
     dataReady = true;
@@ -17729,16 +17725,16 @@ os2_upperOpticalPointSize =
         int midline    = Integer.decode (e.getAttribute ("midline")).intValue();
         int xHeight    = Integer.decode (e.getAttribute ("xHeight")).intValue();
 
-        me.setBYTE (32, familyType);
-        me.setBYTE (33, serifStyle);
-        me.setBYTE (34, weight);
-        me.setBYTE (35, proportion);
-        me.setBYTE (36, contrast);
-        me.setBYTE (37, strokeVariation);
-        me.setBYTE (38, armStyle);
-        me.setBYTE (39, letterform);
-        me.setBYTE (40, midline);
-        me.setBYTE (41, xHeight); }
+        me.setuint8 (32, familyType);
+        me.setuint8 (33, serifStyle);
+        me.setuint8 (34, weight);
+        me.setuint8 (35, proportion);
+        me.setuint8 (36, contrast);
+        me.setuint8 (37, strokeVariation);
+        me.setuint8 (38, armStyle);
+        me.setuint8 (39, letterform);
+        me.setuint8 (40, midline);
+        me.setuint8 (41, xHeight); }
 
       else if ("unicodeRange".equals (e.getTagName ())) {
         int[] range = {0, 0, 0, 0};
@@ -17894,25 +17890,25 @@ os2_upperOpticalPointSize =
 
       at = new AttributesImpl ();
       at.addAttribute ("", "familyType", "familyType", "CDATA",
-                       "" +  getBYTE (32));
+                       "" +  getuint8 (32));
       at.addAttribute ("", "serifStyle", "serifStyle", "CDATA",
-                       "" +  getBYTE (33));
+                       "" +  getuint8 (33));
       at.addAttribute ("", "weight", "weight", "CDATA",
-                       "" +  getBYTE (34));
+                       "" +  getuint8 (34));
       at.addAttribute ("", "proportion", "proportion", "CDATA",
-                       "" +  getBYTE (35));
+                       "" +  getuint8 (35));
       at.addAttribute ("", "contrast", "contrast", "CDATA",
-                       "" +  getBYTE (36));
+                       "" +  getuint8 (36));
       at.addAttribute ("", "strokeVariation", "strokeVariation", "CDATA",
-                       "" +  getBYTE (37));
+                       "" +  getuint8 (37));
       at.addAttribute ("", "armStyle", "armStyle", "CDATA",
-                       "" +  getBYTE (38));
+                       "" +  getuint8 (38));
       at.addAttribute ("", "letterform", "letterform", "CDATA",
-                       "" +  getBYTE (39));
+                       "" +  getuint8 (39));
       at.addAttribute ("", "midline", "midline", "CDATA",
-                       "" +  getBYTE (40));
+                       "" +  getuint8 (40));
       at.addAttribute ("", "xHeight", "xHeight", "CDATA",
-                       "" +  getBYTE (41));
+                       "" +  getuint8 (41));
       conf.ch.element ("panose", at);
 
       if (version > 0) {
@@ -20531,10 +20527,10 @@ post_common =
 
       char[] name = names [gid].toCharArray ();
 
-      me.setBYTE (charOffset, name.length);
+      me.setuint8 (charOffset, name.length);
       charOffset++;
       for (int i = 0; i &lt; name.length; i++) {
-        me.setBYTE (charOffset, name [i]);
+        me.setuint8 (charOffset, name [i]);
         charOffset ++; }}
 
     data = me.serialize ();
@@ -20928,7 +20924,7 @@ public class Post extends Table {
       String[] newNames = new String [numberNewGlyphs];
       try {
         for (int i = 0; i &lt; numberNewGlyphs; i++) {
-          int len = getBYTE (offset);
+          int len = getuint8 (offset);
           offset++;
           newNames [i] = new String (data, offset, len, "ASCII");
           offset += len; }}
@@ -21466,7 +21462,7 @@ simple_glyph =
       int opcodes [] = parseIntList (instructionsElt.getAttribute ("opcodes"));
       instructions = new Block (opcodes.length, 0);
       for (int i = 0; i &lt; opcodes.length; i++) {
-        instructions.setBYTE (i, opcodes [i]); }}
+        instructions.setuint8 (i, opcodes [i]); }}
     else {
       instructions = new Block (0, 0); }
 
@@ -21520,7 +21516,7 @@ simple_glyph =
              thisFlags |= X_IS_SAME_OR_POSITIVE_X_SHORT_VECTOR; }
            else {
              delta_x = - delta_x; }
-           x.setByte (xOffset, delta_x);
+           x.setuint8 (xOffset, delta_x);
            xOffset += 1; }
          else {
            x.setint16 (xOffset, delta_x);
@@ -21537,7 +21533,7 @@ simple_glyph =
              thisFlags |= Y_IS_SAME_OR_POSITIVE_Y_SHORT_VECTOR; }
            else {
              delta_y = - delta_y; }
-           y.setByte (yOffset, delta_y);
+           y.setuint8 (yOffset, delta_y);
            yOffset += 1; }
          else {
            y.setint16 (yOffset, delta_y);
@@ -21549,20 +21545,20 @@ simple_glyph =
            if (lastFlagsRepeat) {
              if (lastFlagsCount &lt; 255) {
                lastFlagsCount++;
-               flags.setByte (flagsOffset - 1, lastFlagsCount); }
+               flags.setuint8 (flagsOffset - 1, lastFlagsCount); }
              else {
-               flags.setByte (flagsOffset, thisFlags);
+               flags.setuint8 (flagsOffset, thisFlags);
                flagsOffset += 1;
                lastFlagsRepeat = false;
                lastFlagsCount = 0; }}
            else {
-             flags.setByte (flagsOffset - 1, lastFlags | REPEAT_FLAG);
-             flags.setByte (flagsOffset, 1);
+             flags.setuint8 (flagsOffset - 1, lastFlags | REPEAT_FLAG);
+             flags.setuint8 (flagsOffset, 1);
              flagsOffset += 1;
              lastFlagsRepeat = true;
              lastFlagsCount = 1; }}
          else {
-           flags.setByte (flagsOffset, thisFlags);
+           flags.setuint8 (flagsOffset, thisFlags);
            flagsOffset += 1;
            lastFlagsRepeat = false;
            lastFlagsCount = 0; }
@@ -21999,7 +21995,7 @@ component_scale |=
       int opcodes [] = parseIntList (instructionsElt.getAttribute ("opcodes"));
       instructions = new Block (opcodes.length, 0);
       for (int i = 0; i &lt; opcodes.length; i++) {
-        instructions.setBYTE (i, opcodes [i]); }}
+        instructions.setuint8 (i, opcodes [i]); }}
     else {
       instructions = new Block (0, 0); }
 
@@ -22062,16 +22058,16 @@ component_scale |=
           data.setint16 (dataOffset, arg1); dataOffset += 2;
           data.setint16 (dataOffset, arg2); dataOffset += 2; }
         else {
-          data.setBYTE (dataOffset, arg1); dataOffset += 1;
-          data.setBYTE (dataOffset, arg2); dataOffset += 1; }}
+          data.setint8 (dataOffset, arg1); dataOffset += 1;
+          data.setint8 (dataOffset, arg2); dataOffset += 1; }}
       else {
         if (256 &lt; arg1 || 256 &lt; arg2) {
           flags |= ARG_1_AND_2_ARE_WORDS;
-          data.setint16 (dataOffset, arg1); dataOffset += 2;
-          data.setint16 (dataOffset, arg2); dataOffset += 2; }
+          data.setuint16 (dataOffset, arg1); dataOffset += 2;
+          data.setuint16 (dataOffset, arg2); dataOffset += 2; }
         else {
-          data.setBYTE (dataOffset, arg1); dataOffset += 1;
-          data.setBYTE (dataOffset, arg2); dataOffset += 1; }}
+          data.setuint8 (dataOffset, arg1); dataOffset += 1;
+          data.setuint8 (dataOffset, arg2); dataOffset += 1; }}
 
       if (scale01 != 0 || scale10 != 0) {
         flags |= WE_HAVE_A_TWO_BY_TWO;
@@ -22114,7 +22110,7 @@ component_scale |=
     result.setint16 (b, Integer.parseInt (e.getAttribute ("yMax"))); b += 2;
 
     for (int i = 0; i &lt; dataOffset; i++) {
-      result.setBYTE (b, data.content [i]); b++; }
+      result.setuint8 (b, data.content [i]); b++; }
 
     if (instructions.content.length > 0) {
       result.setuint16 (b, instructions.content.length); b += 2;
@@ -22215,7 +22211,7 @@ component_scale |=
         String opcodes = "";
         String prefix = "";
         for (int i = 0; i &lt; numInstr; i++) {
-          opcodes += prefix + "0x" + Integer.toString (getBYTE (offset));
+          opcodes += prefix + "0x" + Integer.toString (getuint8 (offset));
           offset += 1;
           prefix = " "; }
 
@@ -62758,7 +62754,7 @@ Lookahead sequence -                   0  1  2  3
       byte [] data = decodeBinaryFromXML (s.getFirstChild ().getNodeValue ());
       Block signatureBlock = new Block (data.length, 0);
       for (int j = 0; j &lt; data.length; j++) {
-        signatureBlock.setByte (j, data [j]); }
+        signatureBlock.setuint8 (j, data [j]); }
 
       me.setuint32 (offset, Integer.parseInt (s.getAttribute ("format")));
       me.setuint32 (offset + 4, signatureBlock.content.length);
@@ -63357,15 +63353,15 @@ hdmx =
 
     for (int i = 0; i &lt; numRecords; i++) {
       Element deviceRecord = (Element) deviceRecords.item (i);
-      me.setBYTE (offset, Integer.decode (deviceRecord.getAttribute ("pixelSize")).intValue ());
+      me.setuint8 (offset, Integer.decode (deviceRecord.getAttribute ("pixelSize")).intValue ());
       offset++;
-      me.setBYTE (offset, Integer.decode (deviceRecord.getAttribute ("maxWidth")).intValue ());
+      me.setuint8 (offset, Integer.decode (deviceRecord.getAttribute ("maxWidth")).intValue ());
       offset++;
 
       NodeList widths = deviceRecord.getChildNodes ();
       for (int j = 0; j &lt; widths.getLength (); j++) {
         Element width = (Element) widths.item (j);
-        me.setBYTE (offset, Integer.decode (width.getAttribute ("v")).intValue ());
+        me.setuint8 (offset, Integer.decode (width.getAttribute ("v")).intValue ());
         offset ++; }
 
       while (offset % 4 != 0) {
@@ -63399,14 +63395,14 @@ hdmx =
 
       for (int i = 0; i &lt; numRecords; i++) {
         at = new AttributesImpl ();
-        at.addAttribute ("", "pixelSize", "pixelSize", "CDATA", "" + getBYTE (offset));
-        at.addAttribute ("", "maxWidth", "maxWidth", "CDATA", "" + getBYTE (offset + 1));
+        at.addAttribute ("", "pixelSize", "pixelSize", "CDATA", "" + getuint8 (offset));
+        at.addAttribute ("", "maxWidth", "maxWidth", "CDATA", "" + getuint8 (offset + 1));
 
         conf.ch.startElement ("deviceRecord", at); {
           for (int gid = 0; gid &lt; numGlyphs; gid++) {
             at = new AttributesImpl ();
             at.addAttribute ("", "gid", "gid", "CDATA", "" + gid);
-            at.addAttribute ("", "v", "v", "CDATA", "" + getBYTE (offset + 2 + gid));
+            at.addAttribute ("", "v", "v", "CDATA", "" + getuint8 (offset + 2 + gid));
             conf.ch.element ("width", at); }
           conf.ch.endElement ("deviceRecord"); }
 
@@ -65282,10 +65278,10 @@ VDMX =
 
       for (int i = 0; i &lt; numRatios; i++) {
         at = new AttributesImpl ();
-        at.addAttribute ("", "bCharSet", "bCharSet", "CDATA", "" + getBYTE (6 + i*4));
-        at.addAttribute ("", "xRatio", "xRatio", "CDATA", "" + getBYTE (6 + i*4 + 1));
-        at.addAttribute ("", "yStartRatio", "yStartRatio", "CDATA", "" + getBYTE (6 + i*4 + 2));
-        at.addAttribute ("", "yEndRatio", "yEndRatio", "CDATA", "" + getBYTE (6 + i*4 + 3));
+        at.addAttribute ("", "bCharSet", "bCharSet", "CDATA", "" + getuint8 (6 + i*4));
+        at.addAttribute ("", "xRatio", "xRatio", "CDATA", "" + getuint8 (6 + i*4 + 1));
+        at.addAttribute ("", "yStartRatio", "yStartRatio", "CDATA", "" + getuint8 (6 + i*4 + 2));
+        at.addAttribute ("", "yEndRatio", "yEndRatio", "CDATA", "" + getuint8 (6 + i*4 + 3));
         at.addAttribute ("", "groupIndex", "groupIndex", "CDATA", "" + getUSHORT (6 + numRatios*4 + 2*i));
         conf.ch.element ("ratio", at); }
 
@@ -65295,8 +65291,8 @@ VDMX =
         int nbRecs = getUSHORT (offset);
         at = new AttributesImpl ();
         at.addAttribute ("", "groupIndex", "groupIndex", "CDATA", "" + offset);
-        at.addAttribute ("", "startsz", "startsz", "CDATA", "" + getBYTE (offset + 2));
-        at.addAttribute ("", "endsz", "endsz", "CDATA", "" + getBYTE (offset + 3));
+        at.addAttribute ("", "startsz", "startsz", "CDATA", "" + getuint8 (offset + 2));
+        at.addAttribute ("", "endsz", "endsz", "CDATA", "" + getuint8 (offset + 3));
 
         conf.ch.startElement ("group", at); {
           offset += 4;
