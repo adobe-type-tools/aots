@@ -21299,6 +21299,29 @@ This function identifies those situations.</para>
     return b;
   }
 </code-fragment>
+
+<para>And a method to return the bounding box of the contours of a glyph:</para>
+
+<code-fragment id='glyf.methods'>
+  <code-title>Glyf methods</code-title>
+  public BoundingBox getContoursBoundingBox (int gid) {
+
+    if (isEmpty (gid)) {
+      return new BoundingBox (); }
+
+    int offset = (int) font.loca.getGlyphLocation (gid);
+    int nbContours = getint16 (offset);
+
+    offset += 10;
+
+    if (nbContours &lt; 0) {
+      return getCompositeGlyphContoursBoundingBox (offset); }
+    else {
+      return getSimpleGlyphContoursBoundingBox (offset, nbContours); }
+  }
+</code-fragment>
+
+
       </section>
     </section>
 
@@ -22547,9 +22570,34 @@ component_scale |=
 
     return maxpValues;
   }
-</code-fragment>
-      </section>
 
+  public BoundingBox getCompositeGlyphContoursBoundingBox (int offset)
+  {
+    BoundingBox b = new BoundingBox ();
+
+    CompositeGlyphUnpack u = unpackCompositeGlyph (offset);
+
+    for (CompositeGlyphComponent c : u.components) {
+      BoundingBox cb = getContoursBoundingBox (c.gid);
+
+      if ((c.flags &amp; ARGS_ARE_XY_VALUES) == 0) {
+        throw new Error ("oops"); }
+
+      // not really the best, should pass the transformation matrix
+      // to get the bb of the transformed glyph; in fact, should
+      // get ctm in and combine with the glyph tm
+
+      b.include (cb.xmin * c.xscale  + cb.ymin * c.scale01 + c.arg1,
+                 cb.xmin * c.scale10 + cb.ymin * c.yscale  + c.arg2);
+
+      b.include (cb.xmax * c.xscale  + cb.ymax * c.scale01 + c.arg1,
+                 cb.xmax * c.scale10 + cb.ymax * c.yscale  + c.arg2); }
+
+    return b;
+  }
+</code-fragment>
+
+      </section>
     </section>
   </section>
 
