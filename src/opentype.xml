@@ -21799,27 +21799,11 @@ public class TTBoundingBox {
 
   TTBoundingBox () {
     this.bb = new BoundingBox ();
-    this.bb.xmin = Double.POSITIVE_INFINITY;
-    this.bb.ymin = Double.POSITIVE_INFINITY;
-
-    this.bb.xmax = Double.NEGATIVE_INFINITY;
-    this.bb.ymax = Double.NEGATIVE_INFINITY;
-  }
-
-  private void includeXY (double x, double y) {
-    if (x &lt; bb.xmin) {
-      bb.xmin = x; }
-    if (bb.xmax &lt; x) {
-      bb.xmax = x; }
-    if (y &lt; bb.ymin) {
-      bb.ymin = y; }
-    if (bb.ymax &lt; y) {
-      bb.ymax = y; }
   }
 
   public void line (double x1, double y1, double x2, double y2) {
-    includeXY (x1, y1);
-    includeXY (x2, y2);
+    bb.include (x1, y1);
+    bb.include (x2, y2);
   }
 
   private double at (double t, double z1, double z2, double z3)
@@ -21833,8 +21817,8 @@ public class TTBoundingBox {
                            double x3, double y3)
   {
     if (0 &lt; t &amp;&amp; t &lt; 1) {
-      includeXY (at (t, x1, x2, x3),
-                 at (t, y1, y2, y3)); }
+      bb.include (at (t, x1, x2, x3),
+                  at (t, y1, y2, y3)); }
   }
 
   private void includeExtremas (double z1, double z2, double z3,
@@ -21852,8 +21836,8 @@ public class TTBoundingBox {
   public void curve (double x1, double y1, double x2, double y2,
                      double x3, double y3)
   {
-    includeXY (x1, y1);
-    includeXY (x3, y3);
+    bb.include (x1, y1);
+    bb.include (x3, y3);
 
     includeExtremas (x1, x2, x3,
                      x1, y1, x2, y2, x3, y3);

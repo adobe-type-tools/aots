@@ -392,6 +392,26 @@ public class BoundingBox {
   public double ymin;
   public double xmax;
   public double ymax;
+
+  public BoundingBox ()
+  {
+    this.xmin = Double.POSITIVE_INFINITY;
+    this.ymin = Double.POSITIVE_INFINITY;
+
+    this.xmax = Double.NEGATIVE_INFINITY;
+    this.ymax = Double.NEGATIVE_INFINITY;
+  }
+
+  public void include (double x, double y) {
+    if (x &lt; xmin) {
+      xmin = x; }
+    if (xmax &lt; x) {
+      xmax = x; }
+    if (y &lt; ymin) {
+     ymin = y; }
+    if (ymax &lt; y) {
+      ymax = y; }
+  }
 }
 </code-fragment>
 
