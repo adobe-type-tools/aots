@@ -417,8 +417,8 @@ public class BoundingBox {
 
 <code-fragment id='cfffontset.methods'>
   <code-title>Method to return the bounding box of a glyph, given its gid</code-title>
-  public BoundingBox getGlyphBoundingBox (int f, int gid) {
-    return fonts [f].getGlyphBoundingBox (gid);
+  public BoundingBox getContoursBoundingBox (int f, int gid) {
+    return fonts [f].getContoursBoundingBox (gid);
   }
 </code-fragment>
 
@@ -529,7 +529,7 @@ public class BoundingBox {
   public void getGlyphOutline (int gid, StringBuilder sb);
   public void getGlyphLinesAndCurves (int gid, StringBuilder sb);
 
-  public BoundingBox getGlyphBoundingBox (int gid);
+  public BoundingBox getContoursBoundingBox (int gid);
 
   public int getGlyphID (String glyphname);
 
@@ -3666,7 +3666,7 @@ protected int[] getINDEXOffsets (byte[] data, int offset)
 	      c);
   }
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
+  public BoundingBox getContoursBoundingBox (int gid) {
     Type2BoundingBox c = new Type2BoundingBox ();
     Type2Interpreter i = new Type2Interpreter ();
     i.decode (charstrings.charstrings [gid],
@@ -6844,8 +6844,8 @@ else
     System.err.println ("TODO: Synthetic.getGlyphLinesAndCurves");
   }
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
-    System.err.println ("TODO: Synthetic.getGlyphBoundingBox");
+  public BoundingBox getContoursBoundingBox (int gid) {
+    System.err.println ("TODO: Synthetic.getContoursBoundingBox");
     return new BoundingBox ();
   }
 
@@ -7498,7 +7498,7 @@ else
   }
 
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
+  public BoundingBox getContoursBoundingBox (int gid) {
     int fdIndex = gid2fontdict (gid);
     Type2BoundingBox c = new Type2BoundingBox ();
     Type2Interpreter i = new Type2Interpreter ();

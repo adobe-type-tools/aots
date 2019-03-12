@@ -10089,7 +10089,7 @@ public class Maxp extends Table {
     setuint16 (6, n);
   }
 
-  public int getMaxCountours () {
+  public int getMaxContours () {
     return getuint16 (8);
   }
 
@@ -21285,7 +21285,7 @@ This function identifies those situations.</para>
     return getint16 (offset) &lt; 0;
   }
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
+  public BoundingBox getGlyfBoundingBox (int gid) {
     BoundingBox b = new BoundingBox ();
 
     if (isEmpty (gid)) {
@@ -22958,12 +22958,12 @@ public class Loca extends Table {
     fontset.getGlyphLinesAndCurves (0, gid, sb);
   }
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
+  public BoundingBox getContoursBoundingBox (int gid) {
     try {
       makeFontsetRight (); }
     catch (InvalidFontException e) {
       System.err.println ("??"); }
-    return fontset.getGlyphBoundingBox (0, gid);
+    return fontset.getContoursBoundingBox (0, gid);
   }
 
   public String getPostScriptName ()
@@ -35275,7 +35275,7 @@ public class Gdef extends LayoutTable {
   <code-title>caretValueTable, format 2</code-title>
   caretValueTable |=
     attribute format { "2" },
-    attribute countourPoint { text }
+    attribute contourPoint { text }
 </code-fragment>
       </section>
 
@@ -83172,11 +83172,11 @@ public class Font {
       gpos.applyFeatures (scriptTag, langSysTag, featureTags, gr); }
   }
 
-  public BoundingBox getGlyphBoundingBox (int gid) {
+  public BoundingBox getContoursBoundingBox (int gid) {
     if (cff != null) {
-      return cff.getGlyphBoundingBox (gid); }
+      return cff.getContoursBoundingBox (gid); }
     else {
-      return glyf.getGlyphBoundingBox (gid); }
+      return glyf.getContoursBoundingBox (gid); }
   }
 }
 </code-fragment>
