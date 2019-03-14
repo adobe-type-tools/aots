@@ -22587,11 +22587,11 @@ component_scale |=
       // to get the bb of the transformed glyph; in fact, should
       // get ctm in and combine with the glyph tm
 
-      b.include (cb.xmin * c.xscale  + cb.ymin * c.scale01 + c.arg1,
-                 cb.xmin * c.scale10 + cb.ymin * c.yscale  + c.arg2);
+      b.include (cb.xmin * c.xscale/16384.0  + cb.ymin * c.scale01/16384.0 + c.arg1,
+                 cb.xmin * c.scale10/16384.0 + cb.ymin * c.yscale/16384.0  + c.arg2);
 
-      b.include (cb.xmax * c.xscale  + cb.ymax * c.scale01 + c.arg1,
-                 cb.xmax * c.scale10 + cb.ymax * c.yscale  + c.arg2); }
+      b.include (cb.xmax * c.xscale/16384.0  + cb.ymax * c.scale01/16384.0 + c.arg1,
+                 cb.xmax * c.scale10/16384.0 + cb.ymax * c.yscale/16384.0  + c.arg2); }
 
     return b;
   }
