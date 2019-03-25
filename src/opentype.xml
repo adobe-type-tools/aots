@@ -447,20 +447,29 @@ public class Compiler implements org.xml.sax.ErrorHandler {
     System.err.println ("Parse warning: " + e);
   }
 
-  private void compile (URL base, Element font, String outfile)
+  private void compile (URL base, Element font, boolean fixDerivedValues, String outfile)
       throws Exception {
     Font f = new Font ();
     f.fromXML (base, font);
+
+    if (fixDerivedValues) {
+      f.maxp.fixValuesDerivedFromGlyf ();
+      f.hhea.fixDerivedValues (); }
+
     f.toBinary (outfile);
   }
 
   private void doMain (String args[]) throws Exception {
     String out = "";
+    boolean fixDerivedValues = false;
 
     for (int i = 0; i &lt; args.length; i++) {
       if (args[i].equals ("-o")) {
         i++;
         out = args[i]; }
+
+      else if (args[i].equals ("-fixderivedvalues")) {
+        fixDerivedValues = true; }
 
       else {
         File f = new File (args[i]);
@@ -470,7 +479,9 @@ public class Compiler implements org.xml.sax.ErrorHandler {
 	if (valid) {
   	  removeWhiteSpace (doc);
 	  compile (f.getAbsoluteFile().toURL (),
-	  doc.getDocumentElement (), out); }}}
+	           doc.getDocumentElement (),
+                   fixDerivedValues,
+                   out); }}}
   }
 
   public static void main (String args[]) throws Exception {
@@ -9408,7 +9419,71 @@ public class Hhea extends Table {
   public void setNumberOfHMetrics (int n) {
     setuint16 (34, n);
   }
+
+  public int getAdvanceWidthMax () {
+    return getuint16 (10);
+  }
+
+  public void setAdvanceWidthMax (int aw) {
+    setuint16 (10, aw);
+  }
+
+  public int getMinLeftSideBearing () {
+    return getuint16 (12);
+  }
+
+  public void setMinLeftSideBearing (int lsb) {
+    setuint16 (12, lsb);
+  }
+
+  public int getMinRightSideBearing () {
+    return getuint16 (14);
+  }
+
+  public void setMinRightSideBearing (int rsb) {
+    setuint16 (14, rsb);
+  }
+
+  public int getXMaxExtent () {
+    return getuint16 (14);
+  }
+
+  public void setXMaxExtent (int xme) {
+    setuint16 (16, xme);
+  }
+
 </code-fragment>
+
+<code-fragment id='hhea.methods'>
+  <code-title>Hhea class</code-title>
+  public void fixDerivedValues () {
+    int advanceWidthMax = 0;
+    int minLeftSideBearing = Integer.MAX_VALUE;
+    int minRightSideBearing = Integer.MAX_VALUE;
+    int xMaxExtent = Integer.MIN_VALUE;
+
+    for (int gid = 0; gid &lt; font.maxp.getNumGlyphs (); gid++) {
+      int aw = font.hmtx.getHorizontalAdvance (gid);
+      int lsb = font.hmtx.getLeftSideBearing (gid);
+      BoundingBox bb
+        = font.cff != null
+        ? font.cff.getContoursBoundingBox (gid)
+        : font.glyf.getGlyfBoundingBox (gid);
+      int extent = (int) Math.ceil (bb.xmax - bb.xmin);
+
+      advanceWidthMax = Math.max (advanceWidthMax, aw);
+      minLeftSideBearing = Math.min (minLeftSideBearing, lsb);
+      minRightSideBearing = Math.min (minRightSideBearing, aw - (lsb + extent));
+      xMaxExtent = Math.max (xMaxExtent, lsb + extent); }
+
+    setAdvanceWidthMax (advanceWidthMax);
+    setMinLeftSideBearing (minLeftSideBearing);
+    setMinRightSideBearing (minRightSideBearing);
+    setXMaxExtent (xMaxExtent);
+  }
+</code-fragment>
+
+
 
       </section>
     </section>
