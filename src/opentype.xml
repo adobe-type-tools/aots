@@ -9412,12 +9412,28 @@ public class Hhea extends Table {
 
 <code-fragment id='hhea.methods'>
   <code-title>Hhea class</code-title>
-  public int getNumberOfHMetrics () {
-    return getuint16 (34);
+  public int getAscender () {
+    return getint16 (4);
   }
 
-  public void setNumberOfHMetrics (int n) {
-    setuint16 (34, n);
+  public void setAscender (int v) {
+    setint16 (4, v);
+  }
+
+  public int getDescender () {
+    return getint16 (6);
+  }
+
+  public void setDescender (int v) {
+    setint16 (6, v);
+  }
+
+  public int getLineGap () {
+    return getint16 (8);
+  }
+
+  public void setLineGap (int v) {
+    setint16 (8, v);
   }
 
   public int getAdvanceWidthMax () {
@@ -9450,6 +9466,14 @@ public class Hhea extends Table {
 
   public void setXMaxExtent (int xme) {
     setuint16 (16, xme);
+  }
+
+  public int getNumberOfHMetrics () {
+    return getuint16 (34);
+  }
+
+  public void setNumberOfHMetrics (int n) {
+    setuint16 (34, n);
   }
 
 </code-fragment>
