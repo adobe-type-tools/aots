@@ -30,6 +30,7 @@
 <xsl:template match='/'>
     <xsl:apply-templates select='//aots:gpos-test'/>
     <xsl:apply-templates select='//aots:gsub-test'/>
+    <xsl:apply-templates select='//aots:cmap-test'/>
     <xsl:apply-templates select='//aots:context-test'/>
 </xsl:template>
 
@@ -70,6 +71,25 @@
     if (gpos_test ("gpos_<xsl:value-of select='@id'/>",
                    "../tests/gpos_<xsl:value-of select='@font'/>.otf",
                    nbIn, in, nbOut, out, x, y)) {
+       pass++; }
+     else {
+       failures++; }
+  }
+</xsl:template>
+
+<xsl:template match='aots:cmap-test'>
+  { unsigned int in[] = { <xsl:value-of select='@inputs'/> };
+    int nbIn = sizeof(in) / sizeof(in[0]);
+
+    unsigned int select[] = { <xsl:value-of select='@select'/> };
+    int nbSelect = sizeof(select) / sizeof(select[0]);
+
+    unsigned int expected[] = { <xsl:value-of select='@outputs'/> };
+    int nbExpected = sizeof(expected) / sizeof(expected[0]);
+
+    if (cmap_test ("<xsl:value-of select='@id'/>",
+                   "../tests/<xsl:value-of select='@font'/>.otf",
+                   nbIn, in, nbSelect, select, nbExpected, expected)) {
        pass++; }
      else {
        failures++; }
