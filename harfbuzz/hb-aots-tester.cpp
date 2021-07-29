@@ -22,11 +22,36 @@ ____________________________________________________________________________*/
 
 static const bool verbose = true;
 
+struct TestData
+{
+    TestData(hb_buffer_t  *buffer_,
+             hb_face_t    *face_,
+             hb_font_t    *font_,
+             hb_feature_t *features_,
+             int           num_features_)
+        : buffer(buffer_), face(face_), font(font_),
+          features(features_), num_features(num_features_)
+    { }
+    ~TestData()
+    {
+        free (features);
+        hb_face_destroy (face);
+        hb_font_destroy (font);
+        hb_buffer_destroy (buffer);
+    }
 
- hb_buffer_t *runTest(const char *testName,
-                      const char *fontfileName,
-                      unsigned int *in, int nbIn,
-                      unsigned int *select, int nbSelect)
+    hb_buffer_t  *buffer;
+    hb_face_t    *face;
+    hb_font_t    *font;
+    hb_feature_t *features;
+    int           num_features;
+};
+
+TestData
+runTest(const char *testName,
+        const char *fontfileName,
+        unsigned int *in, int nbIn,
+        unsigned int *select, int nbSelect)
 {
     FILE *f = fopen (fontfileName, "rb");
     fseek(f, 0, SEEK_END);
@@ -93,11 +118,8 @@ static const bool verbose = true;
     hb_shape(font, buffer, features, nbFeatures);
 
     hb_blob_destroy(blob);
-    hb_font_destroy(font);
-    hb_face_destroy(face);
-    free(features);
     
-    return buffer;
+    return TestData(buffer, face, font, features, nbFeatures);
 }
 
 
@@ -121,14 +143,14 @@ bool gsub_test(const char *testName,
                int nbSelect, unsigned int *select,
                int nbExpected, unsigned int *expected)
 {
-    hb_buffer_t *buffer = runTest(testName,
-                                  fontfileName,
-                                  in, nbIn,
-                                  select, nbSelect);
+    TestData data = runTest(testName,
+                            fontfileName,
+                            in, nbIn,
+                            select, nbSelect);
     
     // verify
-    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(buffer, 0);
-    unsigned int nbActual = hb_buffer_get_length(buffer);
+    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, 0);
+    unsigned int nbActual = hb_buffer_get_length(data.buffer);
     
     bool ok = true;
     
@@ -157,8 +179,6 @@ bool gsub_test(const char *testName,
         printf ("\n");
 
     }
-    
-    hb_buffer_destroy(buffer);
 
     return ok;
 }
@@ -169,14 +189,14 @@ bool cmap_test(const char *testName,
                int nbSelect, unsigned int *select,
                int nbExpected, unsigned int *expected)
 {
-    hb_buffer_t *buffer = runTest(testName,
-                                  fontfileName,
-                                  in, nbIn,
-                                  select, nbSelect);
+    TestData data = runTest(testName,
+                            fontfileName,
+                            in, nbIn,
+                            select, nbSelect);
     
     // verify
-    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(buffer, 0);
-    unsigned int nbActual = hb_buffer_get_length(buffer);
+    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, 0);
+    unsigned int nbActual = hb_buffer_get_length(data.buffer);
     
     bool ok = true;
     
@@ -205,8 +225,6 @@ bool cmap_test(const char *testName,
         printf ("\n");
 
     }
-    
-    hb_buffer_destroy(buffer);
 
     return ok;
 }
@@ -221,15 +239,15 @@ bool gpos_test(const char *testName,
                int *x,
                int *y)
 {
-    hb_buffer_t *buffer = runTest(testName,
-                                  fontfileName,
-                                  in, nbIn,
-                                  0, 0);
+    TestData data = runTest(testName,
+                            fontfileName,
+                            in, nbIn,
+                            0, 0);
     
     // verify
     unsigned int nbActual;
-    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(buffer, &nbActual);
-    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions (buffer, NULL);
+    hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, &nbActual);
+    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions (data.buffer, NULL);
 
     unsigned int *actualG = (unsigned int *) malloc(sizeof(*actualG) * nbActual);
     int *actualX = (int *) malloc(sizeof(*actualX) * nbActual);
@@ -241,9 +259,9 @@ bool gpos_test(const char *testName,
         actualX[i] = curX + pos[i].x_offset;
         actualY[i] = curY + pos[i].y_offset;
 
-        actualX[i] -= 1500 * i;
-
         curX += pos[i].x_advance;
+        if (hb_ot_layout_get_glyph_class (data.face, actualG[i]) != HB_OT_LAYOUT_GLYPH_CLASS_MARK)
+            curX -= 1500;
         curY += pos[i].y_advance;
     }
     
@@ -291,8 +309,6 @@ bool gpos_test(const char *testName,
         }
     }
     
-    hb_buffer_destroy(buffer);
-
     free(actualG);
     free(actualX);
     free(actualY);
