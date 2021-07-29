@@ -5,9 +5,9 @@
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use these files except in compliance with the License.
     You may obtain a copy of the License at
-    
+
     http://www.apache.org/licenses/LICENSE-2.0
-    
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -60,11 +60,11 @@ runTest(const char *testName,
     char *fontdata = (char *)malloc (fontsize);
     fread(fontdata, fontsize, 1, f);
     fclose(f);
-    
+
     if (verbose) {
         printf ("------------------------------- %s\n", testName);
     }
-    
+
     // setup font
     hb_blob_t *blob = hb_blob_create(fontdata, fontsize,
                                      HB_MEMORY_MODE_WRITABLE,
@@ -87,11 +87,11 @@ runTest(const char *testName,
     // setup features
     hb_feature_t *features;
     int nbFeatures;
-    
+
     if (nbSelect == 0)
     {
         nbFeatures = 1;
-    
+
         features = (hb_feature_t *) malloc (sizeof (*features));
         features[0].tag = HB_TAG('t', 'e', 's', 't');
         features[0].value = 1;
@@ -101,7 +101,7 @@ runTest(const char *testName,
     else
     {
         nbFeatures = 0;
-        
+
         features = (hb_feature_t *) malloc (sizeof (*features) * nbSelect);
         for (int i = 0; i < nbSelect; i++) {
             if (select[i] != -1) {
@@ -118,21 +118,21 @@ runTest(const char *testName,
     hb_shape(font, buffer, features, nbFeatures);
 
     hb_blob_destroy(blob);
-    
+
     return TestData(buffer, face, font, features, nbFeatures);
 }
 
 
-void printArray (const char* s, int *a, int n) 
+void printArray (const char* s, int *a, int n)
 {
     printf ("%s  %d : ", s, n);
     for (int i = 0; i < n; i++) {
-        printf (" %d", a[i]); 
+        printf (" %d", a[i]);
     }
     printf ("\n");
 }
 
-void printUArray (const char* s, unsigned int *a, int n) 
+void printUArray (const char* s, unsigned int *a, int n)
 {
     printArray (s, (int *) a, n);
 }
@@ -147,13 +147,13 @@ bool gsub_test(const char *testName,
                             fontfileName,
                             in, nbIn,
                             select, nbSelect);
-    
+
     // verify
     hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, 0);
     unsigned int nbActual = hb_buffer_get_length(data.buffer);
-    
+
     bool ok = true;
-    
+
     if (nbActual != nbExpected)
         ok = false;
     else {
@@ -172,7 +172,7 @@ bool gsub_test(const char *testName,
         for (int i = 0; i < nbExpected; i++) {
             printf (" %d", expected[i]); }
         printf ("\n");
-        
+
         printf ("  actual %d:", nbActual);
         for (int i = 0; i < nbActual; i++) {
             printf (" %d", actual[i].codepoint); }
@@ -193,13 +193,13 @@ bool cmap_test(const char *testName,
                             fontfileName,
                             in, nbIn,
                             select, nbSelect);
-    
+
     // verify
     hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, 0);
     unsigned int nbActual = hb_buffer_get_length(data.buffer);
-    
+
     bool ok = true;
-    
+
     if (nbActual != nbExpected)
         ok = false;
     else {
@@ -218,7 +218,7 @@ bool cmap_test(const char *testName,
         for (int i = 0; i < nbExpected; i++) {
             printf (" %d", expected[i]); }
         printf ("\n");
-        
+
         printf ("  actual %d:", nbActual);
         for (int i = 0; i < nbActual; i++) {
             printf (" %d", actual[i].codepoint); }
@@ -228,7 +228,6 @@ bool cmap_test(const char *testName,
 
     return ok;
 }
-
 
 bool gpos_test(const char *testName,
                const char *fontfileName,
@@ -243,7 +242,7 @@ bool gpos_test(const char *testName,
                             fontfileName,
                             in, nbIn,
                             0, 0);
-    
+
     // verify
     unsigned int nbActual;
     hb_glyph_info_t *actual = hb_buffer_get_glyph_infos(data.buffer, &nbActual);
@@ -264,7 +263,7 @@ bool gpos_test(const char *testName,
             curX -= 1500;
         curY += pos[i].y_advance;
     }
-    
+
     bool nbOk = true;
     bool xOk = true;
     bool yOk = true;
@@ -296,7 +295,7 @@ bool gpos_test(const char *testName,
             }
             printf ("\n");
         }
-        
+
         if (! (nbOk && yOk)) {
             printArray ("expectedY", y, nbOut);
             printArray ("actualY  ", actualY, nbActual);
@@ -308,22 +307,23 @@ bool gpos_test(const char *testName,
             printf ("\n");
         }
     }
-    
+
+
     free(actualG);
     free(actualX);
     free(actualY);
-    
+
     return ok;
 }
 
-        
+
 int main(int argc, char **argv)
 {
     int failures = 0;
     int pass = 0;
-    
+
 #include "hb-aots-tester.h"
-    
+
     printf ("%d failures, %d pass\n", failures, pass);
 }
 
