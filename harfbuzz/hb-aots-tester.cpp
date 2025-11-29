@@ -17,6 +17,7 @@ ____________________________________________________________________________*/
 
 #include "stdlib.h"
 #include "stdio.h"
+#include "string.h"
 #include "hb.h"
 #include "hb-ot.h"
 
@@ -74,7 +75,6 @@ runTest(const char *testName,
     unsigned int upem = hb_face_get_upem (face);
 
     hb_font_set_scale(font, upem, upem);
-    hb_ot_font_set_funcs (font);
 
     // setup buffer
     hb_buffer_t *buffer = hb_buffer_create();
@@ -104,7 +104,7 @@ runTest(const char *testName,
 
         features = (hb_feature_t *) malloc (sizeof (*features) * nbSelect);
         for (int i = 0; i < nbSelect; i++) {
-            if (select[i] != -1) {
+            if (select[i] != (unsigned) -1) {
                 features[nbFeatures].tag = HB_TAG('t', 'e', 's', 't');
                 features[nbFeatures].value = select[i];
                 features[nbFeatures].start = i;
@@ -137,6 +137,14 @@ void printUArray (const char* s, unsigned int *a, int n)
     printArray (s, (int *) a, n);
 }
 
+void writeDirective (FILE *file)
+{
+  fseek (file, 0, SEEK_END);
+  unsigned file_size = ftell (file);
+  if (!file_size)
+    fprintf (file, "@shaper=ot\n");
+}
+
 bool gsub_test(const char *testName,
                const char *fontfileName,
                int nbIn, unsigned int *in,
@@ -164,6 +172,40 @@ bool gsub_test(const char *testName,
             }
         }
     }
+
+
+    char test_name[255];
+    sprintf (test_name, "../../tests/%.*s.tests", (int) (strrchr (testName, '_') - testName), testName);
+    FILE *tests_file = fopen (test_name, "a+");
+    writeDirective (tests_file);
+    if (!ok) fprintf (tests_file, "#");
+    fprintf (tests_file, "../fonts/%s;--features=\"", fontfileName + 9);
+    for (unsigned int i = 0; i < data.num_features; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        char buf[255];
+        hb_feature_to_string (&data.features[i], buf, sizeof (buf));
+        fprintf (tests_file, "%s", buf);
+    }
+    fprintf (tests_file, "\" --single-par --no-clusters --no-glyph-names --no-positions;");
+
+    for (unsigned int i = 0; i < nbIn; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        fprintf (tests_file, "U+%04X", in[i]);
+    }
+
+    fprintf (tests_file, ";[");
+    for (unsigned int i = 0; i < nbActual; i++)
+    {
+        if (i != 0) fprintf (tests_file, "|");
+        fprintf (tests_file, "%d", expected[i]);
+    }
+    fprintf (tests_file, "]");
+
+    fprintf (tests_file, "\n");
+    fclose (tests_file);
+
 
     if (! ok) {
         printf ("******* GSUB %s\n", testName);
@@ -210,6 +252,40 @@ bool cmap_test(const char *testName,
             }
         }
     }
+
+
+    char test_name[255];
+    sprintf (test_name, "../../tests/%.*s.tests", (int) (strrchr (testName, '_') - testName), testName);
+    FILE *tests_file = fopen (test_name, "a+");
+    writeDirective (tests_file);
+    if (!ok) fprintf (tests_file, "#");
+    fprintf (tests_file, "../fonts/%s;--features=\"", fontfileName + 9);
+    for (unsigned int i = 0; i < data.num_features; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        char buf[255];
+        hb_feature_to_string (&data.features[i], buf, sizeof (buf));
+        fprintf (tests_file, "%s", buf);
+    }
+    fprintf (tests_file, "\" --single-par --no-clusters --no-glyph-names --no-positions --font-funcs=ot;");
+
+    for (unsigned int i = 0; i < nbIn; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        fprintf (tests_file, "U+%04X", in[i]);
+    }
+
+    fprintf (tests_file, ";[");
+    for (unsigned int i = 0; i < nbActual; i++)
+    {
+        if (i != 0) fprintf (tests_file, "|");
+        fprintf (tests_file, "%d", expected[i]);
+    }
+    fprintf (tests_file, "]");
+
+    fprintf (tests_file, "\n");
+    fclose (tests_file);
+
 
     if (! ok) {
         printf ("******* cmap %s\n", testName);
@@ -307,6 +383,46 @@ bool gpos_test(const char *testName,
             printf ("\n");
         }
     }
+
+
+    char test_name[255];
+    sprintf (test_name, "../../tests/%.*s.tests", (int) (strrchr (testName, '_') - testName), testName);
+    FILE *tests_file = fopen (test_name, "a+");
+    writeDirective (tests_file);
+    if (!ok) fprintf (tests_file, "#");
+    fprintf (tests_file, "../fonts/%s;--features=\"", fontfileName + 9);
+    for (unsigned int i = 0; i < data.num_features; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        char buf[255];
+        hb_feature_to_string (&data.features[i], buf, sizeof (buf));
+        fprintf (tests_file, "%s", buf);
+    }
+    fprintf (tests_file, "\" --single-par --no-clusters --no-glyph-names --ned;");
+
+    for (unsigned int i = 0; i < nbIn; i++)
+    {
+        if (i != 0) fprintf (tests_file, ",");
+        fprintf (tests_file, "U+%04X", in[i]);
+    }
+
+    fprintf (tests_file, ";[");
+    int accumlatedAdvance = 0;
+    for (unsigned int i = 0; i < nbActual; i++)
+    {
+        if (i != 0) fprintf (tests_file, "|");
+        fprintf (tests_file, "%d", /*it should be "out[i]"*/ actualG[i]);
+
+        int expected_x = x[i] + accumlatedAdvance;
+        int expected_y = y[i];
+        if (expected_x || expected_y) fprintf (tests_file, "@%d,%d", expected_x, expected_y);
+        if (hb_ot_layout_get_glyph_class (data.face, actualG[i]) != HB_OT_LAYOUT_GLYPH_CLASS_MARK)
+            accumlatedAdvance += 1500;
+    }
+    fprintf (tests_file, "]");
+
+    fprintf (tests_file, "\n");
+    fclose (tests_file);
 
 
     free(actualG);
